@@ -1,4 +1,4 @@
-"""Unified audit logging engine — all Endpoint skills write to a single SQLite database.
+"""Unified audit logging engine — all PostgreSQL skills write to a single SQLite database.
 
 Replaces 7 per-skill JSON Lines audit loggers with one shared ``~/.postgres-aiops/audit.db``.
 Framework-agnostic: works with Claude, Codex, local agents, or any MCP client.

@@ -3,7 +3,7 @@
 Two jobs:
 
   * ``s`` — pass catalog/query text through the governance ``sanitize`` (bounded
-    length, prompt-injection defense) before it reaches an agent.
+    length, control-character stripping) before it reaches an agent.
   * ``qualify`` / ``quote_ident`` — the ONLY sanctioned way to place an
     identifier (schema/table/index/column) into a statement that cannot be
     parameterised (DDL, ``VACUUM``, ``ANALYZE``, ``REINDEX``). Every part is

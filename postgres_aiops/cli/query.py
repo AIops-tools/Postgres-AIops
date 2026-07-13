@@ -59,12 +59,15 @@ def query_explain(
 @query_app.command("reset")
 @cli_errors
 def query_reset(target: TargetOption = None, dry_run: DryRunOption = False) -> None:
-    """Reset pg_stat_statements accumulators (irreversible; dry-run + confirm)."""
-    from postgres_aiops.ops import queries as ops
+    """Reset pg_stat_statements accumulators (irreversible; dry-run + confirm).
+
+    Real execution is delegated to the ``@governed_tool``-wrapped MCP function
+    so the reset is audited on the same governance path as MCP calls.
+    """
+    from mcp_server.tools import queries as gov
 
     if dry_run:
         dry_run_print(operation="reset_query_stats", api_call="SELECT pg_stat_statements_reset()")
         return
     double_confirm("reset pg_stat_statements on", "this target")
-    conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.reset_query_stats(conn)))
+    console.print_json(json.dumps(gov.reset_query_stats(target=target)))
