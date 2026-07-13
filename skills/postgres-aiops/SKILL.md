@@ -105,6 +105,7 @@ Pass data straight to the analysis tools — `slow_query_rca(statements=[...])`,
 
 - Every tool is audited to `~/.postgres-aiops/audit.db` (relocatable via `POSTGRES_AIOPS_HOME`).
 - High-risk ops can require a named approver: set `POSTGRES_AUDIT_APPROVED_BY` and `POSTGRES_AUDIT_RATIONALE` (the env-var names the bundled harness reads).
+- **Secure by default (v0.2.0+)**: with no `~/.postgres-aiops/rules.yaml`, high/critical operations are denied unless `POSTGRES_AUDIT_APPROVED_BY` names an approver (set `POSTGRES_AUDIT_RATIONALE` too). `postgres-aiops init` seeds a starter rules.yaml; an operator-authored rules file is honoured as-is.
 - Writes support `--dry-run` / `dry_run=True` and double confirmation at the CLI.
 - Reversible writes fetch the real before-state and record an inverse descriptor; irreversible ops (terminate/cancel, vacuum/analyze, reindex, reset stats) record prior stats only.
 - All values are bound query parameters; identifiers that cannot be parameterised are validated and quoted.
