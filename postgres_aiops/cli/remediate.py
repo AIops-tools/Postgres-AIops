@@ -14,7 +14,6 @@ from postgres_aiops.cli._common import (
     console,
     double_confirm,
     dry_run_print,
-    get_connection,
 )
 
 remediate_app = typer.Typer(
@@ -32,15 +31,14 @@ def remediate_terminate(
     dry_run: DryRunOption = False,
 ) -> None:
     """Terminate a backend (no undo; dry-run + confirm)."""
-    from postgres_aiops.ops import remediation as ops
-
     if dry_run:
         dry_run_print(operation="terminate_backend",
                       api_call="SELECT pg_terminate_backend(pid)", parameters={"pid": pid})
         return
     double_confirm("terminate backend", str(pid))
-    conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.terminate_backend(conn, pid)))
+    from mcp_server.tools import remediation as gov
+
+    console.print_json(json.dumps(gov.terminate_backend(pid=pid, target=target)))
 
 
 @remediate_app.command("cancel")
@@ -51,15 +49,14 @@ def remediate_cancel(
     dry_run: DryRunOption = False,
 ) -> None:
     """Cancel a backend's running query (no undo; dry-run + confirm)."""
-    from postgres_aiops.ops import remediation as ops
-
     if dry_run:
         dry_run_print(operation="cancel_query",
                       api_call="SELECT pg_cancel_backend(pid)", parameters={"pid": pid})
         return
     double_confirm("cancel query on backend", str(pid))
-    conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.cancel_query(conn, pid)))
+    from mcp_server.tools import remediation as gov
+
+    console.print_json(json.dumps(gov.cancel_query(pid=pid, target=target)))
 
 
 @remediate_app.command("vacuum")
@@ -72,15 +69,15 @@ def remediate_vacuum(
     dry_run: DryRunOption = False,
 ) -> None:
     """VACUUM a table (dry-run + confirm)."""
-    from postgres_aiops.ops import remediation as ops
-
     if dry_run:
         dry_run_print(operation="run_vacuum", api_call=f"VACUUM {table}",
                       parameters={"full": full, "analyze": analyze})
         return
     double_confirm("VACUUM", table)
-    conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.run_vacuum(conn, table, full=full, analyze=analyze)))
+    from mcp_server.tools import remediation as gov
+
+    console.print_json(
+        json.dumps(gov.run_vacuum(table=table, full=full, analyze=analyze, target=target)))
 
 
 @remediate_app.command("analyze-table")
@@ -91,14 +88,13 @@ def remediate_analyze(
     dry_run: DryRunOption = False,
 ) -> None:
     """ANALYZE a table (dry-run + confirm)."""
-    from postgres_aiops.ops import remediation as ops
-
     if dry_run:
         dry_run_print(operation="run_analyze", api_call=f"ANALYZE {table}")
         return
     double_confirm("ANALYZE", table)
-    conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.run_analyze(conn, table)))
+    from mcp_server.tools import remediation as gov
+
+    console.print_json(json.dumps(gov.run_analyze(table=table, target=target)))
 
 
 @remediate_app.command("create-index")
@@ -113,16 +109,15 @@ def remediate_create_index(
     dry_run: DryRunOption = False,
 ) -> None:
     """Create an index (reversible; dry-run + confirm)."""
-    from postgres_aiops.ops import remediation as ops
-
     if dry_run:
         dry_run_print(operation="create_index", api_call=f"CREATE INDEX ON {table}",
                       parameters={"columns": columns, "name": name, "unique": unique})
         return
     double_confirm("create index on", table)
-    conn, _ = get_connection(target)
-    result = ops.create_index(conn, table, columns, name=name, unique=unique,
-                              concurrently=concurrently)
+    from mcp_server.tools import remediation as gov
+
+    result = gov.create_index(table=table, columns=columns, name=name, unique=unique,
+                              concurrently=concurrently, target=target)
     console.print_json(json.dumps(result))
 
 
@@ -135,14 +130,14 @@ def remediate_drop_index(
     dry_run: DryRunOption = False,
 ) -> None:
     """Drop an index (reversible; captures the definition first; dry-run + confirm)."""
-    from postgres_aiops.ops import remediation as ops
-
     if dry_run:
         dry_run_print(operation="drop_index", api_call=f"DROP INDEX {name}")
         return
     double_confirm("drop index", name)
-    conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.drop_index(conn, name, concurrently=concurrently)))
+    from mcp_server.tools import remediation as gov
+
+    console.print_json(
+        json.dumps(gov.drop_index(name=name, concurrently=concurrently, target=target)))
 
 
 @remediate_app.command("reindex")
@@ -155,15 +150,14 @@ def remediate_reindex(
     dry_run: DryRunOption = False,
 ) -> None:
     """REINDEX an index/table/schema (dry-run + confirm)."""
-    from postgres_aiops.ops import remediation as ops
-
     if dry_run:
         dry_run_print(operation="reindex", api_call=f"REINDEX {kind} {target_name}")
         return
     double_confirm(f"REINDEX {kind}", target_name)
-    conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.reindex(conn, target_name, kind=kind,
-                                              concurrently=concurrently)))
+    from mcp_server.tools import remediation as gov
+
+    console.print_json(json.dumps(gov.reindex(target_name=target_name, kind=kind,
+                                              concurrently=concurrently, target=target)))
 
 
 @remediate_app.command("set")
@@ -175,12 +169,11 @@ def remediate_set(
     dry_run: DryRunOption = False,
 ) -> None:
     """ALTER SYSTEM SET a parameter (reversible; dry-run + confirm)."""
-    from postgres_aiops.ops import remediation as ops
-
     if dry_run:
         dry_run_print(operation="update_setting",
                       api_call=f"ALTER SYSTEM SET {name} = ...", parameters={"value": value})
         return
     double_confirm(f"ALTER SYSTEM SET {name} =", value)
-    conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.update_setting(conn, name, value)))
+    from mcp_server.tools import remediation as gov
+
+    console.print_json(json.dumps(gov.update_setting(name=name, value=value, target=target)))
