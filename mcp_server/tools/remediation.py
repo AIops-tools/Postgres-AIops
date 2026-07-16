@@ -162,12 +162,13 @@ def run_analyze(table: str, dry_run: bool = False, target: Optional[str] = None)
 @governed_tool(risk_level="medium", undo=_create_index_undo)
 @tool_errors("dict")
 def create_index(
-    table: str,
-    columns: list[str],
+    table: Optional[str] = None,
+    columns: Optional[list[str]] = None,
     name: Optional[str] = None,
     unique: bool = False,
     concurrently: bool = False,
     method: Optional[str] = None,
+    definition: Optional[str] = None,
     dry_run: bool = False,
     target: Optional[str] = None,
 ) -> dict:
@@ -175,21 +176,34 @@ def create_index(
 
     Supports CONCURRENTLY (non-blocking build). The created name is returned so
     the harness records an undo that drops exactly this index. Pass dry_run=True
-    to preview.
+    to preview. Alternatively pass ``definition`` (a captured pg_get_indexdef
+    statement — this is how drop_index's undo descriptor replays) INSTEAD of
+    table/columns.
 
     Args:
-        table: Table to index (optionally schema-qualified).
-        columns: Column names to index.
+        table: Table to index (optionally schema-qualified). Required unless
+            ``definition`` is given.
+        columns: Column names to index. Required unless ``definition`` is given.
         name: Index name (auto-generated from table+columns when omitted).
         unique: Create a UNIQUE index.
         concurrently: Build with CONCURRENTLY (no table lock).
         method: Index method — btree/hash/gist/gin/brin/spgist (default btree).
+        definition: A full CREATE [UNIQUE] INDEX statement to execute verbatim
+            (shape-validated). Mutually exclusive with table/columns.
         dry_run: If True, preview without creating.
         target: Target name from config; omit for the default.
     """
+    if definition and (table or columns):
+        raise ValueError("Pass either definition OR table+columns, not both.")
+    if not definition and not (table and columns):
+        raise ValueError("create_index requires table+columns (or a definition).")
     conn = _get_connection(target)
     if dry_run:
+        if definition:
+            return {"dryRun": True, "wouldExecute": definition}
         return {"dryRun": True, "wouldCreate": {"table": table, "columns": columns, "name": name}}
+    if definition:
+        return ops.create_index_from_definition(conn, definition)
     return ops.create_index(
         conn, table, columns, name=name, unique=unique,
         concurrently=concurrently, method=method,

@@ -162,6 +162,36 @@ def create_index(
     }
 
 
+# Shape gate for replaying a captured pg_get_indexdef statement. Server-generated
+# (never user-composed), but validated anyway: single statement, CREATE INDEX only.
+_INDEXDEF_RE = re.compile(
+    r"^CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?"
+    r'("?[A-Za-z_][A-Za-z0-9_$]*"?)\s+ON\s+',
+    re.IGNORECASE,
+)
+
+
+def create_index_from_definition(conn: Any, definition: str) -> dict:
+    """[WRITE] Recreate an index from a captured ``pg_get_indexdef`` statement.
+
+    This is the replay path for ``drop_index``'s undo descriptor: the exact
+    definition captured before the drop is executed verbatim after a shape
+    check (single statement, must be CREATE [UNIQUE] INDEX ... ON ...).
+    """
+    stmt = (definition or "").strip().rstrip(";").strip()
+    if not stmt or ";" in stmt:
+        raise ValueError("definition must be a single CREATE INDEX statement.")
+    m = _INDEXDEF_RE.match(stmt)
+    if not m:
+        raise ValueError("definition must start with CREATE [UNIQUE] INDEX ... ON ...")
+    conn.execute(stmt)  # nosec B608 — shape-validated pg_get_indexdef output
+    return {
+        "action": "create_index",
+        "index": m.group(1).strip('"'),
+        "fromDefinition": True,
+    }
+
+
 def drop_index(conn: Any, name: str, concurrently: bool = False) -> dict:
     """[WRITE] Drop an index. Reversible: captures pg_get_indexdef first so undo recreates it."""
     ident = qualify(name)
