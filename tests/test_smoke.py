@@ -34,6 +34,8 @@ EXPECTED_TOOLS = {
     # writes
     "reset_query_stats", "terminate_backend", "cancel_query", "run_vacuum",
     "run_analyze", "create_index", "drop_index", "reindex", "update_setting",
+    # undo executor
+    "undo_list", "undo_apply",
 }
 
 WRITE_RISK = {
@@ -64,6 +66,7 @@ def test_all_modules_import():
         "mcp_server.server", "mcp_server._shared",
         "mcp_server.tools.server", "mcp_server.tools.activity",
         "mcp_server.tools.queries", "mcp_server.tools.indexes",
+        "postgres_aiops.cli.undo", "mcp_server.tools.undo",
         "mcp_server.tools.tables", "mcp_server.tools.replication",
         "mcp_server.tools.analysis", "mcp_server.tools.remediation",
     ):

@@ -17,6 +17,7 @@ from postgres_aiops.cli.replication import repl_app
 from postgres_aiops.cli.secret import secret_app
 from postgres_aiops.cli.server import server_app
 from postgres_aiops.cli.table import table_app
+from postgres_aiops.cli.undo import undo_app
 
 app = typer.Typer(
     name="postgres-aiops",
@@ -33,6 +34,7 @@ app.add_typer(repl_app, name="repl")
 app.add_typer(analyze_app, name="analyze")
 app.add_typer(remediate_app, name="remediate")
 app.add_typer(secret_app, name="secret")
+app.add_typer(undo_app, name="undo")
 app.command("init")(init_cmd)
 app.command("overview")(overview_cmd)
 app.command("doctor")(doctor_cmd)
