@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-import json
 from typing import Annotated
 
 import typer
 
-from postgres_aiops.cli._common import TargetOption, cli_errors, console, get_connection
+from postgres_aiops.cli._common import (
+    TargetOption,
+    cli_errors,
+    get_connection,
+    print_result,
+)
 
 analyze_app = typer.Typer(
     name="analyze",
@@ -20,26 +24,36 @@ analyze_app = typer.Typer(
 @cli_errors
 def analyze_slow_query(
     explain_sql: Annotated[str | None, typer.Option("--explain", help="SQL to EXPLAIN")] = None,
+    limit: Annotated[int, typer.Option("--limit", help="Statements to consider")] = 20,
     target: TargetOption = None,
 ) -> None:
     """Root-cause the worst pg_stat_statements entry."""
     from postgres_aiops.ops import analysis, queries
 
     conn, _ = get_connection(target)
-    statements = queries.top_queries(conn, order_by="total_time")["statements"]
+    source = queries.top_queries(conn, order_by="total_time", limit=limit)
     explain = queries.explain_query(conn, explain_sql) if explain_sql else None
-    console.print_json(json.dumps(analysis.slow_query_rca(statements, explain=explain)))
+    result = analysis.slow_query_rca(source["statements"], explain=explain)
+    result["sourceTruncated"] = source["truncated"]
+    result["sourceLimit"] = source["limit"]
+    print_result(result)
 
 
 @analyze_app.command("bloat-vacuum")
 @cli_errors
-def analyze_bloat_vacuum(target: TargetOption = None) -> None:
+def analyze_bloat_vacuum(
+    limit: Annotated[int, typer.Option("--limit", help="Tables to consider")] = 50,
+    target: TargetOption = None,
+) -> None:
     """Rank tables needing vacuum from dead-tuple ratio + autovacuum recency."""
     from postgres_aiops.ops import analysis, tables
 
     conn, _ = get_connection(target)
-    rows = tables.table_bloat(conn)["tables"]
-    console.print_json(json.dumps(analysis.bloat_and_vacuum_analysis(rows)))
+    source = tables.table_bloat(conn, limit=limit)
+    result = analysis.bloat_and_vacuum_analysis(source["tables"])
+    result["sourceTruncated"] = source["truncated"]
+    result["sourceLimit"] = source["limit"]
+    print_result(result)
 
 
 @analyze_app.command("blocking")
@@ -50,4 +64,4 @@ def analyze_blocking(target: TargetOption = None) -> None:
 
     conn, _ = get_connection(target)
     pairs = activity.blocking_pairs(conn)
-    console.print_json(json.dumps(analysis.blocking_lock_chain_rca(pairs)))
+    print_result(analysis.blocking_lock_chain_rca(pairs))

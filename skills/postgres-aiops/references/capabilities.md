@@ -1,11 +1,11 @@
 # postgres-aiops capabilities
 
-> Preview / mock-only. 33 MCP tools (24 read, 9 write). Catalog / `pg_stat_*`
-> queries are modelled from documented shapes and need live verification.
+> 35 MCP tools (25 read, 10 write). Catalog / `pg_stat_*` queries have been
+> exercised against a live PostgreSQL 16.14 instance (see docs/VERIFICATION.md).
 > `top_queries` / `slow_query_rca` require the `pg_stat_statements` extension;
 > the read role should have `pg_monitor`.
 
-## Read tools (24)
+## Read tools (25)
 
 | Tool | Source | Returns |
 |------|--------|---------|
@@ -33,11 +33,12 @@
 | `slow_query_rca` | pg_stat_statements + EXPLAIN | worst{}, findings[] (cited cause/action) |
 | `bloat_and_vacuum_analysis` | table-bloat rows | recommendations[] (cited reasons + action) |
 | `blocking_lock_chain_rca` | `pg_blocking_pids` pairs | roots[], worstRootPid, deadlockSuspected |
+| `undo_list` | local undo store | recorded, not-yet-applied reversible writes: undoId, ts, originalTool, inverseTool, note |
 
 The flagship analyses accept injected records (`statements=` / `tables=` /
 `pairs=`) for pure/offline analysis, or pull live from a configured `target`.
 
-## Write tools (9)
+## Write tools (10)
 
 | Tool | Risk | SQL | Undo / safety |
 |------|------|-----|---------------|
@@ -50,6 +51,7 @@ The flagship analyses accept injected records (`statements=` / `tables=` /
 | `reindex` | medium | `REINDEX INDEX/TABLE/SCHEMA` | rebuild in place; no undo |
 | `update_setting` | medium | `ALTER SYSTEM SET` | captures prior value; undo = set back; reports pg_reload_conf needed |
 | `reset_query_stats` | medium | `pg_stat_statements_reset()` | irreversible; no undo |
+| `undo_apply` | medium | dispatches the recorded inverse tool | executes a recorded inverse; the inverse runs through its own governed tool (its real risk tier + approver gate apply); single-use token; supports `dry_run` |
 
 All values are bound query parameters; identifiers that cannot be parameterised
 (table/index/GUC names, ORDER BY columns, index methods, REINDEX kinds) are

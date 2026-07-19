@@ -154,7 +154,7 @@ def test_cli_index_all_four(monkeypatch):
     _patch_conn(monkeypatch, cli_index, conn)
     assert _out_json(runner.invoke(app, ["index", "unused"]))["count"] == 1
     assert _out_json(runner.invoke(app, ["index", "missing"]))["count"] == 1
-    assert _out_json(runner.invoke(app, ["index", "bloat"]))["count"] == 1
+    assert _out_json(runner.invoke(app, ["index", "bloat"]))["returned"] == 1
     assert _out_json(runner.invoke(app, ["index", "invalid"]))["invalidCount"] == 1
 
 
@@ -175,7 +175,7 @@ def test_cli_table_sizes_bloat_autovacuum(monkeypatch):
                                       "last_autovacuum": None}],
     })
     _patch_conn(monkeypatch, cli_table, conn)
-    assert _out_json(runner.invoke(app, ["table", "sizes"]))["count"] == 1
+    assert _out_json(runner.invoke(app, ["table", "sizes"]))["returned"] == 1
     assert _out_json(runner.invoke(app, ["table", "bloat"]))["tables"][0]["deadPct"] == 20.0
     av = _out_json(runner.invoke(app, ["table", "autovacuum"]))
     assert av["neverAutovacuumedWithDead"] == ["t"]

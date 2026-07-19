@@ -75,7 +75,7 @@ def tool_errors(shape: str = "dict") -> Callable:
 mcp = FastMCP(
     "postgres-aiops",
     instructions=(
-        "Governed PostgreSQL DBA operations (preview): a one-shot cluster "
+        "Governed PostgreSQL DBA operations: a one-shot cluster "
         "'overview'; server reads (version/settings/extensions/databases/roles); "
         "activity (sessions, long-running queries, locks); query stats "
         "(pg_stat_statements top-N, EXPLAIN); index and table health (unused / "

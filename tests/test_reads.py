@@ -91,7 +91,9 @@ def test_top_queries_orders_by_whitelist_column_and_computes_cache_ratio():
     # the whitelisted column must appear in the emitted SQL, not the raw choice
     sql, params = conn.queried[0]
     assert "shared_blks_read DESC" in sql
-    assert params == {"limit": 5}
+    # limit + 1 is fetched so `truncated` is measured, not inferred from length
+    assert params == {"limit": 6}
+    assert out["returned"] == 1 and out["limit"] == 5 and out["truncated"] is False
 
 
 @pytest.mark.unit

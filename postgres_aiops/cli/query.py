@@ -15,6 +15,7 @@ from postgres_aiops.cli._common import (
     double_confirm,
     dry_run_print,
     get_connection,
+    print_result,
 )
 
 query_app = typer.Typer(
@@ -37,7 +38,7 @@ def query_top(
     from postgres_aiops.ops import queries as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.top_queries(conn, order_by=order_by, limit=limit)))
+    print_result(ops.top_queries(conn, order_by=order_by, limit=limit))
 
 
 @query_app.command("explain")

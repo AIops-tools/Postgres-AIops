@@ -166,13 +166,31 @@ def _bloat_row(r: dict) -> dict:
 
 
 def index_bloat(conn: Any, limit: int = 50) -> dict:
-    """[READ] Coarse index-bloat estimate (all inputs returned for transparency)."""
-    rows = conn.query(_BLOAT_SQL, {"limit": max(1, min(int(limit), 500))})
-    indexes = [_bloat_row(r) for r in rows]
+    """[READ] Coarse index-bloat estimate (all inputs returned for transparency).
+
+    The SQL takes the ``limit`` largest indexes by on-disk size; the returned
+    list is then re-sorted worst-bloat-first.
+
+    Returns an envelope rather than a bare list::
+
+        {"indexes": [...], "returned": N, "limit": L, "truncated": true}
+
+    so a truncated read announces itself. A bare list cannot say "there is
+    more" — the consumer has to infer it from the length happening to equal the
+    limit, and a smaller local model faced with a long result tends to report
+    that nothing came back at all. One extra row is requested so ``truncated``
+    is *measured* rather than guessed from a length coincidence.
+    """
+    requested = max(1, min(int(limit), 500))
+    rows = list(conn.query(_BLOAT_SQL, {"limit": requested + 1}))
+    truncated = len(rows) > requested
+    indexes = [_bloat_row(r) for r in rows[:requested]]
     indexes.sort(key=lambda i: i["estBloatBytes"], reverse=True)
     return {
-        "count": len(indexes),
         "indexes": indexes,
+        "returned": len(indexes),
+        "limit": requested,
+        "truncated": truncated,
         "note": (
             "Coarse heuristic: estimated ideal size = ceil(tuples * "
             f"{_AVG_ENTRY_BYTES}B / {_BLOCK_SIZE}B pages). For precise bloat install "

@@ -40,9 +40,11 @@ def undo_list(limit: int = 50, target: Optional[str] = None) -> dict:
         limit: Max rows to return (default 50).
         target: Unused (undo state is host-local); accepted for CLI uniformity.
     """
-    rows = get_undo_store().list(status="recorded", limit=max(1, min(limit, 500)))
+    requested = max(1, min(limit, 500))
+    rows = list(get_undo_store().list(status="recorded", limit=requested + 1))
+    truncated = len(rows) > requested
+    rows = rows[:requested]
     return {
-        "count": len(rows),
         "undos": [
             {
                 "undoId": r["undo_id"],
@@ -53,6 +55,9 @@ def undo_list(limit: int = 50, target: Optional[str] = None) -> dict:
             }
             for r in rows
         ],
+        "returned": len(rows),
+        "limit": requested,
+        "truncated": truncated,
     }
 
 

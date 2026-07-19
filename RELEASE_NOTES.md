@@ -1,52 +1,48 @@
-# Postgres AIops v0.1.0 — preview
+# Release notes — postgres-aiops 0.4.0
 
-Governed AI-ops for **PostgreSQL DBA operations** for AI agents — connecting via
-**psycopg 3** and reading the system catalogs and `pg_stat_*` views — with a
-built-in governance harness (audit, policy, token/runaway budget, undo-token
-recording, graduated risk tiers) and an encrypted credential store. Standalone —
-no external skill-family dependency.
+Previous release: 0.3.0.
 
-> **Preview / mock-only.** All behaviour is validated against a mocked psycopg
-> cursor/connection; it has **not** been run against a live PostgreSQL cluster.
-> The fastest live check is `postgres-aiops doctor`.
->
-> Community-maintained; **not affiliated with or endorsed by the PostgreSQL
-> Global Development Group.** "PostgreSQL" and related trademarks belong to their
-> owners.
-
-## Highlights
-
-- **33 MCP tools** (24 read, 9 write), every one wrapped with `@governed_tool`.
-  - Read: cluster `overview`; server (5); activity (3); query stats (2); index
-    health (4); table health (3); replication (3); and three flagship analyses.
-  - Write: `terminate_backend`/`cancel_query`/`drop_index` (high);
-    `run_vacuum`/`run_analyze`/`create_index`/`reindex`/`update_setting`/
-    `reset_query_stats` (medium).
-- **Three signature analyses** — `slow_query_rca` (worst `pg_stat_statements`
-  entry + EXPLAIN → cited cause/action), `bloat_and_vacuum_analysis` (dead-tuple
-  ratio + autovacuum recency → recommendation), and `blocking_lock_chain_rca`
-  (build the wait-for tree, name the root blocker).
-- **Encrypted password store** (`~/.postgres-aiops/secrets.enc`, Fernet + scrypt)
-  — never plaintext on disk; legacy `PG_<TARGET>_PASSWORD` env fallback.
-- **CLI** with an `init` onboarding wizard, `secret` management, and `doctor`.
-- **psycopg 3 connection layer** — parameterised catalog reads, `dict_row`
-  results, autocommit for maintenance commands, and teaching error translation
-  (`PgError`). Reversible writes fetch the real before-state first.
-
-## Install
+## Headline: read-only mode
 
 ```bash
-uv tool install postgres-aiops
-postgres-aiops init
-postgres-aiops doctor
+export POSTGRES_READ_ONLY=1
 ```
 
-## Caveats
+With this set the **10 write tools are never registered** — an MCP
+client lists **25 tools instead of 35**. The writes are not hidden
+behind a flag and not merely refused on call: they are absent from the session,
+so a model cannot invoke one and cannot be argued into one. For a reviewer this
+is checkable rather than promised — connect, list the tools, and the writes are
+not there.
 
-- The catalog / `pg_stat_*` queries are modelled from the documented shapes and
-  need live verification against a real cluster.
-- `top_queries` / `slow_query_rca` require the `pg_stat_statements` extension;
-  the read role should have `pg_monitor`.
-- Out of scope by design: application-schema migrations, ORM management, logical
-  backup/restore orchestration, and any bulk destructive DDL.
-- Missing a view, metric, or maintenance command? Open an issue or PR.
+Enforcement is two layers deep: the `@governed_tool` harness refuses every
+non-read operation (covering the CLI and in-process callers too), and the MCP
+server removes write tools from `list_tools()`. Changing entry point does not
+get around it.
+
+## BREAKING — return shapes changed
+
+This release changes payloads that callers may be parsing. Both changes exist
+to stop a result from misrepresenting itself:
+
+1. **Absent fields are now `null`, not `""`.** A missing value and an empty value
+   were previously indistinguishable, which invited consumers to invent the
+   difference. Keys are still always present — only the value may be null.
+2. **Anything with a `limit` now returns an envelope** —
+   `{"<items>": [...], "returned": N, "limit": L, "truncated": bool}`. Truncation is
+   *measured* (one extra row is fetched), never inferred from the page happening to
+   be full. Where a genuine pre-cap total is knowable it is reported as `total`;
+   where it isn't, `total` is deliberately omitted rather than echoing `returned`.
+
+## Also in this release
+
+- **`docs/VERIFICATION.md`** — what the mock suite actually guarantees, a live
+  verification checklist, and the criteria for claiming this tool verified.
+- **`skills/postgres-aiops/references/agent-guardrails.md`** — for driving this tool with a
+  smaller / local model: which guardrails are now enforced for you, and a
+  ready-made system prompt for the rest.
+- Expanded operator playbooks in the skill documentation.
+- The advertised tool count now matches what an MCP client actually lists
+  (it includes `undo_list` / `undo_apply`), and a release gate keeps it honest.
+- The `(preview)` label has been dropped. It never meant unreleased; verification
+  status now lives in `docs/VERIFICATION.md` where it can be specific.

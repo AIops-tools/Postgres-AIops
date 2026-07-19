@@ -174,6 +174,9 @@ def bloat_and_vacuum_analysis(tables: list[dict]) -> dict:
         "needsAttentionCount": len(recs),
         "thresholds": {"deadPct": _DEAD_PCT_WARN, "deadTuples": _DEAD_TUP_WARN},
         "recommendations": recs[:MAX_ROWS],
+        "returned": min(len(recs), MAX_ROWS),
+        "limit": MAX_ROWS,
+        "truncated": len(recs) > MAX_ROWS,
         "note": (
             "Advisory read-only heuristic: flags deadPct >= "
             f"{_DEAD_PCT_WARN}% with >= {_DEAD_TUP_WARN} dead tuples, or a table "
@@ -256,6 +259,9 @@ def blocking_lock_chain_rca(pairs: list[dict]) -> dict:
         "rootCount": len(roots),
         "worstRootPid": roots[0]["rootPid"],
         "roots": roots[:MAX_ROWS],
+        "returned": min(len(roots), MAX_ROWS),
+        "limit": MAX_ROWS,
+        "truncated": len(roots) > MAX_ROWS,
         "note": (
             "Advisory read-only heuristic: a root blocker holds locks others wait "
             "on but waits on nobody; worst root blocks the most backends."

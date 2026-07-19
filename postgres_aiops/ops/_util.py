@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from postgres_aiops.governance import sanitize
+from postgres_aiops.governance import opt_str, sanitize
 
 # A PostgreSQL unquoted identifier component: letter/underscore then
 # letters/digits/underscore/dollar. We deliberately reject everything else
@@ -38,8 +38,29 @@ STATEMENT_ORDER_COLUMNS = {
 
 
 def s(value: Any, limit: int = 200) -> str:
-    """Sanitize an arbitrary value to a bounded, injection-safe string."""
+    """Sanitize an arbitrary value to a bounded, injection-safe string.
+
+    Folds SQL ``NULL`` into ``""``. Use only for columns that are genuinely
+    always present; for a nullable column use :func:`opt` instead.
+    """
     return sanitize(str(value if value is not None else ""), limit)
+
+
+def opt(value: Any, limit: int = 200) -> str | None:
+    """Sanitize a nullable column, preserving SQL ``NULL`` as ``None``.
+
+    PostgreSQL catalogs are full of columns whose ``NULL`` carries meaning:
+    ``pg_stat_user_tables.last_autovacuum`` is NULL because the table was *never*
+    autovacuumed, ``pg_settings.unit`` is NULL because the setting is not a
+    numeric quantity, ``pg_replication_slots.database`` is NULL because the slot
+    is physical rather than logical. Rendering those as ``""`` throws the fact
+    away — a consumer cannot tell "never vacuumed" from "vacuumed at the empty
+    string", and a smaller local model will confidently invent the difference.
+
+    So absence stays ``None`` (JSON ``null``) and only a genuinely empty value
+    comes back as ``""``.
+    """
+    return opt_str(value, limit)
 
 
 def quote_ident(part: str) -> str:

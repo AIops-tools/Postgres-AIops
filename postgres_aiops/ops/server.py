@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from postgres_aiops.ops._util import human_bytes, s
+from postgres_aiops.ops._util import human_bytes, opt, s
 
 _VERSION_SQL = """
 SELECT version() AS version,
@@ -72,7 +72,7 @@ def server_version(conn: Any) -> dict:
         "uptime": s(row.get("uptime"), 64),
         "inRecovery": bool(row.get("in_recovery")),
         "database": s(row.get("database"), 128),
-        "dataDirectory": s(row.get("data_directory"), 256),
+        "dataDirectory": opt(row.get("data_directory"), 256),
     }
 
 
@@ -84,14 +84,14 @@ def show_settings(conn: Any, pattern: str | None = None) -> list[dict]:
         {
             "name": s(r.get("name"), 128),
             "setting": s(r.get("setting"), 256),
-            "unit": s(r.get("unit"), 32),
+            "unit": opt(r.get("unit"), 32),
             "category": s(r.get("category"), 128),
             "context": s(r.get("context"), 32),
             "source": s(r.get("source"), 64),
             "pendingRestart": bool(r.get("pending_restart")),
             "bootVal": s(r.get("boot_val"), 256),
             "resetVal": s(r.get("reset_val"), 256),
-            "description": s(r.get("short_desc"), 256),
+            "description": opt(r.get("short_desc"), 256),
         }
         for r in rows
     ]
@@ -102,14 +102,14 @@ def list_extensions(conn: Any) -> list[dict]:
     rows = conn.query(_EXTENSIONS_SQL)
     out = []
     for r in rows:
-        installed = s(r.get("installed_version"), 32)
-        default = s(r.get("default_version"), 32)
+        installed = opt(r.get("installed_version"), 32)
+        default = opt(r.get("default_version"), 32)
         out.append({
             "name": s(r.get("name"), 128),
             "installedVersion": installed,
             "defaultVersion": default,
             "updateAvailable": bool(default and installed and default != installed),
-            "comment": s(r.get("comment"), 256),
+            "comment": opt(r.get("comment"), 256),
         })
     return out
 
@@ -145,7 +145,7 @@ def list_roles(conn: Any) -> list[dict]:
             "replication": bool(r.get("replication")),
             "bypassRls": bool(r.get("bypass_rls")),
             "connLimit": r.get("conn_limit"),
-            "validUntil": s(r.get("valid_until"), 64),
+            "validUntil": opt(r.get("valid_until"), 64),
         }
         for r in rows
     ]

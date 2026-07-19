@@ -1,10 +1,16 @@
 ---
 name: postgres-aiops
+slug: postgres-aiops
+displayName: "Postgres AIops"
+summary: "Governed PostgreSQL DBA ops: slow-query RCA, bloat/vacuum & blocking-lock analysis; 35 MCP tools."
+license: MIT
+homepage: https://github.com/AIops-tools/Postgres-AIops
+tags: [aiops, mcp, governance, postgres]
 description: >
   Use this skill whenever the user needs to operate or troubleshoot a PostgreSQL server/cluster as a DBA — a one-shot cluster health overview; server reads (version/uptime, settings, extensions, databases, roles); activity (sessions, idle-in-transaction, long-running queries, locks); query stats (pg_stat_statements top-N, EXPLAIN a statement); index health (unused indexes, missing-index hints, bloat, invalid/duplicate); table health (sizes, dead-tuple bloat, autovacuum status); replication (standby lag, replication slots, WAL); three flagship analyses — slow-query RCA (worst pg_stat_statements entry + EXPLAIN → cause/action), bloat & vacuum analysis (dead tuples + autovacuum lag → recommendation), and blocking lock-chain RCA (build the wait-for tree, name the root blocker); and guarded writes (terminate a backend, cancel a query, VACUUM/ANALYZE, create/drop an index, REINDEX, ALTER SYSTEM SET a parameter, reset query stats).
   Always use this skill for "postgres health check", "why is this query slow", "pg_stat_statements top queries", "EXPLAIN this", "table/index bloat", "which indexes are unused", "missing index", "autovacuum status", "who is blocking whom", "kill the backend holding the lock", "replication lag", "replication slots", "VACUUM this table", "create/drop an index", or "ALTER SYSTEM SET work_mem" when the context is a PostgreSQL database.
   Do NOT use when the target is OT / industrial equipment (Modbus, OPC-UA, PLCs — use industrial-aiops), a hypervisor, a storage appliance, a backup product, a container/cluster orchestrator, or a non-PostgreSQL database (negative routing hints only).
-  Preview — common PostgreSQL DBA operations with a built-in governance harness (audit, policy, token budget, undo, risk-tiers). Mock-validated only, not run against a live cluster.
+  Covers common PostgreSQL DBA operations with a built-in governance harness (audit, policy, token budget, undo, risk-tiers). Beyond the mock suite, the reads plus a governed write and its undo have been exercised against a live PostgreSQL 16.14 instance (see docs/VERIFICATION.md).
 installer:
   kind: uv
   package: postgres-aiops
@@ -13,7 +19,7 @@ allowed-tools:
   - Bash
 metadata: {"openclaw":{"requires":{"env":["POSTGRES_AIOPS_CONFIG"],"bins":["postgres-aiops"],"config":["~/.postgres-aiops/config.yaml","~/.postgres-aiops/secrets.enc"]},"optional":{"env":["POSTGRES_AIOPS_MASTER_PASSWORD"]},"primaryEnv":"POSTGRES_AIOPS_CONFIG","homepage":"https://github.com/AIops-tools/Postgres-AIops","emoji":"🐘","os":["macos","linux"]}}
 compatibility: >
-  Standalone, self-governed PostgreSQL DBA operations (preview). The governance harness (audit, policy, token/runaway budget, undo, risk-tiers) is bundled in the package — no external skill-family dependency. Connects via psycopg 3 and reads the system catalogs and pg_stat_* views.
+  Standalone, self-governed PostgreSQL DBA operations. The governance harness (audit, policy, token/runaway budget, undo, risk-tiers) is bundled in the package — no external skill-family dependency. Connects via psycopg 3 and reads the system catalogs and pg_stat_* views.
   All write operations are audited to a local SQLite DB under ~/.postgres-aiops/ (relocatable via POSTGRES_AIOPS_HOME).
   Credentials: the PostgreSQL role password is stored ENCRYPTED in ~/.postgres-aiops/secrets.enc (Fernet/AES-128 + scrypt-derived key) — never plaintext on disk. Run 'postgres-aiops init' to onboard, or 'postgres-aiops secret set <target>' to add one. The store is unlocked by a master password from POSTGRES_AIOPS_MASTER_PASSWORD (non-interactive/MCP/CI) or an interactive prompt (CLI on a TTY). A legacy plaintext env var PG_<TARGET_NAME_UPPER>_PASSWORD is still honoured as a fallback with a deprecation warning (migrate with 'postgres-aiops secret migrate'). The password is passed to psycopg.connect at connect time and held only in memory; it is never logged or echoed.
   SQL safety: all values are bound query parameters; the few identifiers that cannot be parameterised (table/index/GUC names, ORDER BY columns, index methods) are validated against strict allow-lists and quoted before interpolation. EXPLAIN rejects multi-statement input.
@@ -21,16 +27,16 @@ compatibility: >
   Webhooks: none — no outbound network calls beyond the configured PostgreSQL connection.
   SSL: sslmode follows libpq (default prefer); set require/verify-full on untrusted networks.
   Transitive dependencies: psycopg[binary] (PostgreSQL driver) and the MCP SDK. No post-install scripts or background services.
-  PREVIEW: mock-validated only; the catalog / pg_stat_* queries are modelled from documented shapes and need live verification. Community-maintained; not affiliated with the PostgreSQL project — trademarks belong to their owners.
+  Verification status: the catalog / pg_stat_* reads, the bloat/vacuum RCA, and the create_index/drop_index governed write path (audit + undo) have been exercised against a live PostgreSQL 16.14 instance; docs/VERIFICATION.md records what was and was not covered. Community-maintained; not affiliated with the PostgreSQL project — trademarks belong to their owners.
 ---
 
-# Postgres AIops (preview)
+# Postgres AIops
 
 > **Disclaimer**: Community-maintained open-source project, **not affiliated with, endorsed by, or sponsored by the PostgreSQL Global Development Group or any vendor.** "PostgreSQL" and related trademarks belong to their owners. Source at [github.com/AIops-tools/Postgres-AIops](https://github.com/AIops-tools/Postgres-AIops) under the MIT license.
 
-Governed PostgreSQL DBA operations — **33 MCP tools**, every one wrapped with the bundled `@governed_tool` harness: a local unified audit log under `~/.postgres-aiops/`, policy engine, token/runaway budget guard, undo-token recording, and graduated-autonomy risk tiers. The role password is stored **encrypted** (`~/.postgres-aiops/secrets.enc`, Fernet + scrypt) — never plaintext on disk.
+Governed PostgreSQL DBA operations — **35 MCP tools**, every one wrapped with the bundled `@governed_tool` harness: a local unified audit log under `~/.postgres-aiops/`, policy engine, token/runaway budget guard, undo-token recording, and graduated-autonomy risk tiers. The role password is stored **encrypted** (`~/.postgres-aiops/secrets.enc`, Fernet + scrypt) — never plaintext on disk.
 
-> **Standalone**: the governance harness is bundled in the package (`postgres_aiops.governance`) — postgres-aiops has no external skill-family dependency. **Preview / mock-only**: not run against a live cluster.
+> **Standalone**: the governance harness is bundled in the package (`postgres_aiops.governance`) — postgres-aiops has no external skill-family dependency. Beyond the mock suite, the reads plus a governed write and its undo have been exercised against a live PostgreSQL 16.14 instance (see `docs/VERIFICATION.md`).
 
 ## What This Skill Does
 
@@ -79,27 +85,47 @@ postgres-aiops doctor
 
 ## Common Workflows
 
-### Root-cause a slow database
+### "The app got slow this afternoon" — root-cause and add the missing index
 
-1. `postgres-aiops analyze slow-query` → the worst `pg_stat_statements` entry with cited findings (seq scan, low cache-hit ratio, temp spill, high calls) and an action for each
-2. `postgres-aiops query explain "<sql>"` → confirm the plan (look for Seq Scan on a large table)
-3. If the fix is an index: `postgres-aiops remediate create-index <table> <cols> --concurrently --dry-run`, then re-run without `--dry-run`
+1. `postgres-aiops overview` → one-shot cluster picture: connections, database sizes, obvious saturation
+2. `postgres-aiops analyze slow-query` → the worst `pg_stat_statements` entry with cited findings (seq scan, low cache-hit ratio, temp spill, high call count) and a concrete action for each
+3. `postgres-aiops query explain "<sql>"` → confirm the plan yourself; a Seq Scan on a large table is the index signal
+4. `postgres-aiops index missing` → the tool's own index hints, to cross-check that step 3's conclusion is not a one-off
+5. `postgres-aiops remediate create-index <table> <col> --concurrently --dry-run` → preview the exact DDL; then run without `--dry-run` (double confirmation). `create_index` is reversible — an inverse `drop_index` is recorded
+6. `postgres-aiops query reset` then re-run `analyze slow-query` after a while → confirm the query actually dropped out of the top, rather than assuming
+7. **Failure branch**: if the new index does not help, or `--concurrently` left an `INVALID` index (`postgres-aiops index invalid`), roll it back with `postgres-aiops undo list` → `postgres-aiops undo apply <id>`. An invalid index still costs writes — drop it rather than leaving it behind.
 
-### Reclaim bloat safely (reversible index changes)
+### Reclaim table bloat and retire a redundant index (reversible)
 
-1. `postgres-aiops analyze bloat-vacuum` → tables ranked by dead-tuple ratio + autovacuum lag
-2. `postgres-aiops remediate vacuum <table> --analyze --dry-run` → preview, then re-run to VACUUM ANALYZE
-3. For a redundant index: `postgres-aiops remediate drop-index <name>` — captures `pg_get_indexdef` first and records an inverse recreate undo descriptor
+1. `postgres-aiops analyze bloat-vacuum` → tables ranked by dead-tuple ratio and autovacuum lag, each citing the measured numbers
+2. `postgres-aiops table autovacuum` → check whether autovacuum is simply behind (last run, thresholds) before doing it by hand
+3. `postgres-aiops remediate vacuum <table> --analyze --dry-run` → preview; then run for real to `VACUUM ANALYZE` (double confirmation)
+4. `postgres-aiops index unused` and `postgres-aiops index bloat` → find indexes that cost writes and return nothing
+5. `postgres-aiops remediate drop-index <name> --concurrently --dry-run`, then for real → the tool captures `pg_get_indexdef` **before** dropping and records an inverse recreate descriptor
+6. **Failure branch**: dropped the wrong index — `postgres-aiops undo apply <id>` recreates it from the captured definition (not a guess). Note `--full` on `remediate vacuum` takes an **exclusive lock** and rewrites the table; it has no undo, so never reach for it as a first response on a live table.
 
-### Break a blocking pile-up
+### Break a blocking pile-up during an incident
 
-1. `postgres-aiops analyze blocking` → the wait-for tree names the **root blocker** pid
-2. Inspect it with `postgres-aiops activity list --state active`
-3. `postgres-aiops remediate cancel <pid>` (or `terminate <pid>`) — dry-run + double-confirm; the prior query is captured for audit
+1. `postgres-aiops analyze blocking` → the wait-for chain, naming the **root blocker** pid rather than the visible victims
+2. `postgres-aiops activity locks` → the raw lock rows behind the chain; confirm the blocker is what the RCA says it is
+3. `postgres-aiops activity long --min-seconds 60` → how long the blocker has actually been running, and whether it is idle-in-transaction
+4. `postgres-aiops remediate cancel <pid> --dry-run` → preview; then for real. **Cancel before terminate** — cancel ends the query, terminate kills the whole backend and rolls back its transaction
+5. Only if cancel does not clear it: `postgres-aiops remediate terminate <pid>` (double confirmation)
+6. **Failure branch**: both `cancel_query` and `terminate_backend` declare **no undo** — a killed session cannot be restored. The audit row in `~/.postgres-aiops/audit.db` captures the prior query text and state for the incident write-up. If the same blocker reappears, the fix is upstream (application transaction scope), not another terminate.
+
+### Tune a parameter and prove it moved the needle (reversible)
+
+1. `postgres-aiops server settings work_mem` → the current value and where it came from
+2. `postgres-aiops analyze slow-query` → confirm a temp-spill finding is what actually motivates the change
+3. `postgres-aiops remediate set work_mem 64MB --dry-run` → preview the `ALTER SYSTEM SET`; then run for real (double confirmation) — the prior value is captured and an inverse `update_setting` is recorded
+4. Reload/restart per the parameter's context, then `postgres-aiops server settings work_mem` to confirm the value took effect
+5. **Failure branch**: if the change causes memory pressure, `postgres-aiops undo apply <id>` restores the **prior** value. `ALTER SYSTEM` only writes `postgresql.auto.conf` — a parameter with `context = postmaster` needs a restart, so a "successful" write that did not change behaviour usually means the restart is still pending, not that the tool failed.
 
 ### Offline analysis (no live cluster)
 
-Pass data straight to the analysis tools — `slow_query_rca(statements=[...])`, `bloat_and_vacuum_analysis(tables=[...])`, or `blocking_lock_chain_rca(pairs=[...])` — to analyse an exported dataset without connecting.
+1. Export `pg_stat_statements`, table-bloat, and blocking-pair rows to JSON
+2. Feed them straight to the analysis tools — `slow_query_rca(statements=[...])`, `bloat_and_vacuum_analysis(tables=[...])`, `blocking_lock_chain_rca(pairs=[...])` — no connection or credentials required
+3. **Failure branch**: a tool that rejects the injected rows means the export is missing the columns the analysis needs (calls/total_time/rows, dead-tuple counts, blocked/blocking pids) — re-export rather than hand-editing, so the findings stay traceable to the cluster.
 
 ## Governance & Safety
 

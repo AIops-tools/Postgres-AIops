@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import json
+from typing import Annotated
 
 import typer
 
-from postgres_aiops.cli._common import TargetOption, cli_errors, console, get_connection
+from postgres_aiops.cli._common import (
+    TargetOption,
+    cli_errors,
+    console,
+    get_connection,
+    print_result,
+)
 
 index_app = typer.Typer(
     name="index",
@@ -37,12 +44,15 @@ def index_missing(target: TargetOption = None) -> None:
 
 @index_app.command("bloat")
 @cli_errors
-def index_bloat(target: TargetOption = None) -> None:
+def index_bloat(
+    limit: Annotated[int, typer.Option("--limit", help="Indexes to inspect")] = 50,
+    target: TargetOption = None,
+) -> None:
     """Coarse index-bloat estimate."""
     from postgres_aiops.ops import indexes as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.index_bloat(conn)))
+    print_result(ops.index_bloat(conn, limit=limit))
 
 
 @index_app.command("invalid")

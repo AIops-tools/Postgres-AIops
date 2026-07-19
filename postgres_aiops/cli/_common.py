@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
@@ -11,6 +12,9 @@ import typer
 from rich.console import Console
 
 console = Console()
+# Truncation/advice notices go to stderr so stdout stays a clean JSON stream
+# that can be piped straight into jq without a trailing human sentence.
+err_console = Console(stderr=True)
 
 # ─── Shared Option types ───────────────────────────────────────────────────
 
@@ -56,6 +60,29 @@ def get_connection(target: str | None, config_path: Path | None = None) -> tuple
     cfg = load_config(config_path)
     mgr = ConnectionManager(cfg)
     return mgr.connect(target), cfg
+
+
+def print_result(result: dict, *, limit_flag: str = "--limit") -> None:
+    """Print a read result as JSON, then warn when it was truncated.
+
+    The ``truncated`` flag is already in the JSON, but a truncated read is
+    exactly the case a reader (human or model) skims past — so it also gets a
+    plain sentence naming the flag to raise. That sentence goes to stderr so
+    stdout remains parseable JSON.
+    """
+    console.print_json(json.dumps(result))
+    if isinstance(result, dict) and result.get("truncated"):
+        err_console.print(
+            f"[yellow]… truncated at {result.get('limit')} rows "
+            f"({result.get('returned')} returned) — re-run with a higher "
+            f"{limit_flag} to see the rest.[/]"
+        )
+    if isinstance(result, dict) and result.get("sourceTruncated"):
+        err_console.print(
+            f"[yellow]… this analysis was drawn from a truncated read "
+            f"(source limit {result.get('sourceLimit')}) — re-run with a higher "
+            f"{limit_flag} for the full picture.[/]"
+        )
 
 
 def dry_run_print(*, operation: str, api_call: str, parameters: dict | None = None) -> None:

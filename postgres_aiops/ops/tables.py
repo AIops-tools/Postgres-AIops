@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from postgres_aiops.ops._util import human_bytes, s
+from postgres_aiops.ops._util import human_bytes, opt, s
 
 _SIZES_SQL = """
 SELECT n.nspname AS schema,
@@ -68,8 +68,21 @@ LIMIT %(limit)s
 
 
 def table_sizes(conn: Any, limit: int = 20) -> dict:
-    """[READ] Largest tables by total relation size (table + indexes + TOAST)."""
-    rows = conn.query(_SIZES_SQL, {"limit": max(1, min(int(limit), 500))})
+    """[READ] Largest tables by total relation size (table + indexes + TOAST).
+
+    Returns an envelope rather than a bare list::
+
+        {"tables": [...], "returned": N, "limit": L, "truncated": true}
+
+    so a truncated read announces itself. A bare list cannot say "there is
+    more" — the consumer has to infer it from the length happening to equal the
+    limit, and a smaller local model faced with a long result tends to report
+    that nothing came back at all. One extra row is requested so ``truncated``
+    is *measured* rather than guessed from a length coincidence.
+    """
+    requested = max(1, min(int(limit), 500))
+    rows = list(conn.query(_SIZES_SQL, {"limit": requested + 1}))
+    truncated = len(rows) > requested
     tables = [
         {
             "schema": s(r.get("schema"), 128),
@@ -81,9 +94,14 @@ def table_sizes(conn: Any, limit: int = 20) -> dict:
             "toastBytes": r.get("toast_bytes"),
             "estRows": r.get("est_rows"),
         }
-        for r in rows
+        for r in rows[:requested]
     ]
-    return {"count": len(tables), "tables": tables}
+    return {
+        "tables": tables,
+        "returned": len(tables),
+        "limit": requested,
+        "truncated": truncated,
+    }
 
 
 def _bloat_row(r: dict) -> dict:
@@ -95,20 +113,35 @@ def _bloat_row(r: dict) -> dict:
         "deadPct": float(r.get("dead_pct") or 0),
         "sizeBytes": r.get("size_bytes"),
         "sizePretty": human_bytes(r.get("size_bytes")),
-        "lastVacuum": s(r.get("last_vacuum"), 64),
-        "lastAutovacuum": s(r.get("last_autovacuum"), 64),
-        "lastAnalyze": s(r.get("last_analyze"), 64),
-        "lastAutoanalyze": s(r.get("last_autoanalyze"), 64),
+        "lastVacuum": opt(r.get("last_vacuum"), 64),
+        "lastAutovacuum": opt(r.get("last_autovacuum"), 64),
+        "lastAnalyze": opt(r.get("last_analyze"), 64),
+        "lastAutoanalyze": opt(r.get("last_autoanalyze"), 64),
     }
 
 
 def table_bloat(conn: Any, limit: int = 50) -> dict:
-    """[READ] Dead-tuple bloat proxy per table (dead / (live + dead)), worst first."""
-    rows = conn.query(_BLOAT_SQL, {"limit": max(1, min(int(limit), 500))})
-    tables = [_bloat_row(r) for r in rows]
+    """[READ] Dead-tuple bloat proxy per table (dead / (live + dead)), worst first.
+
+    Returns an envelope rather than a bare list::
+
+        {"tables": [...], "returned": N, "limit": L, "truncated": true}
+
+    so a truncated read announces itself. A bare list cannot say "there is
+    more" — the consumer has to infer it from the length happening to equal the
+    limit, and a smaller local model faced with a long result tends to report
+    that nothing came back at all. One extra row is requested so ``truncated``
+    is *measured* rather than guessed from a length coincidence.
+    """
+    requested = max(1, min(int(limit), 500))
+    rows = list(conn.query(_BLOAT_SQL, {"limit": requested + 1}))
+    truncated = len(rows) > requested
+    tables = [_bloat_row(r) for r in rows[:requested]]
     return {
-        "count": len(tables),
         "tables": tables,
+        "returned": len(tables),
+        "limit": requested,
+        "truncated": truncated,
         "note": (
             "deadPct = dead / (live + dead) from pg_stat_user_tables — a vacuum "
             "proxy, not physical bloat. VACUUM makes dead space reusable; VACUUM "
@@ -118,8 +151,21 @@ def table_bloat(conn: Any, limit: int = 50) -> dict:
 
 
 def autovacuum_status(conn: Any, limit: int = 50) -> dict:
-    """[READ] Per-table dead tuples, mods-since-analyze, and last (auto)vacuum times."""
-    rows = conn.query(_AUTOVAC_SQL, {"limit": max(1, min(int(limit), 500))})
+    """[READ] Per-table dead tuples, mods-since-analyze, and last (auto)vacuum times.
+
+    Returns an envelope rather than a bare list::
+
+        {"tables": [...], "returned": N, "limit": L, "truncated": true}
+
+    so a truncated read announces itself. A bare list cannot say "there is
+    more" — the consumer has to infer it from the length happening to equal the
+    limit, and a smaller local model faced with a long result tends to report
+    that nothing came back at all. One extra row is requested so ``truncated``
+    is *measured* rather than guessed from a length coincidence.
+    """
+    requested = max(1, min(int(limit), 500))
+    rows = list(conn.query(_AUTOVAC_SQL, {"limit": requested + 1}))
+    truncated = len(rows) > requested
     tables = [
         {
             "schema": s(r.get("schema"), 128),
@@ -127,20 +173,22 @@ def autovacuum_status(conn: Any, limit: int = 50) -> dict:
             "liveTuples": r.get("n_live_tup"),
             "deadTuples": r.get("n_dead_tup"),
             "modSinceAnalyze": r.get("n_mod_since_analyze"),
-            "lastVacuum": s(r.get("last_vacuum"), 64),
-            "lastAutovacuum": s(r.get("last_autovacuum"), 64),
-            "lastAnalyze": s(r.get("last_analyze"), 64),
-            "lastAutoanalyze": s(r.get("last_autoanalyze"), 64),
+            "lastVacuum": opt(r.get("last_vacuum"), 64),
+            "lastAutovacuum": opt(r.get("last_autovacuum"), 64),
+            "lastAnalyze": opt(r.get("last_analyze"), 64),
+            "lastAutoanalyze": opt(r.get("last_autoanalyze"), 64),
             "vacuumCount": r.get("vacuum_count"),
             "autovacuumCount": r.get("autovacuum_count"),
             "analyzeCount": r.get("analyze_count"),
             "autoanalyzeCount": r.get("autoanalyze_count"),
         }
-        for r in rows
+        for r in rows[:requested]
     ]
     never_autovac = [t["table"] for t in tables if not t["lastAutovacuum"] and t["deadTuples"]]
     return {
-        "count": len(tables),
         "neverAutovacuumedWithDead": never_autovac,
         "tables": tables,
+        "returned": len(tables),
+        "limit": requested,
+        "truncated": truncated,
     }

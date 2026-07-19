@@ -1,6 +1,6 @@
 # postgres-aiops setup & security guide
 
-> Preview / mock-only — not run against a live PostgreSQL cluster.
+> Reads, a governed write, and its undo have been exercised against a live PostgreSQL 16.14 instance (see docs/VERIFICATION.md).
 
 ## 1. Install
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from postgres_aiops.ops._util import s
+from postgres_aiops.ops._util import opt, s
 
 _ACTIVITY_SQL = """
 SELECT pid,
@@ -84,17 +84,17 @@ WHERE cardinality(pg_blocking_pids(blocked.pid)) > 0
 def _activity_row(r: dict) -> dict:
     return {
         "pid": r.get("pid"),
-        "username": s(r.get("username"), 128),
-        "database": s(r.get("database"), 128),
-        "clientAddr": s(r.get("client_addr"), 64),
-        "applicationName": s(r.get("application_name"), 128),
-        "state": s(r.get("state"), 64),
-        "waitEventType": s(r.get("wait_event_type"), 64),
-        "waitEvent": s(r.get("wait_event"), 64),
-        "backendType": s(r.get("backend_type"), 64),
+        "username": opt(r.get("username"), 128),
+        "database": opt(r.get("database"), 128),
+        "clientAddr": opt(r.get("client_addr"), 64),
+        "applicationName": opt(r.get("application_name"), 128),
+        "state": opt(r.get("state"), 64),
+        "waitEventType": opt(r.get("wait_event_type"), 64),
+        "waitEvent": opt(r.get("wait_event"), 64),
+        "backendType": opt(r.get("backend_type"), 64),
         "queryAgeSeconds": r.get("query_age_seconds"),
         "xactAgeSeconds": r.get("xact_age_seconds"),
-        "query": s(r.get("query"), 500),
+        "query": opt(r.get("query"), 500),
     }
 
 
@@ -129,14 +129,14 @@ def long_running_queries(conn: Any, min_seconds: int = 60) -> dict:
     queries = [
         {
             "pid": r.get("pid"),
-            "username": s(r.get("username"), 128),
-            "database": s(r.get("database"), 128),
-            "state": s(r.get("state"), 64),
+            "username": opt(r.get("username"), 128),
+            "database": opt(r.get("database"), 128),
+            "state": opt(r.get("state"), 64),
             "durationSeconds": r.get("duration_seconds"),
             "duration": s(r.get("duration"), 64),
-            "waitEventType": s(r.get("wait_event_type"), 64),
-            "waitEvent": s(r.get("wait_event"), 64),
-            "query": s(r.get("query"), 500),
+            "waitEventType": opt(r.get("wait_event_type"), 64),
+            "waitEvent": opt(r.get("wait_event"), 64),
+            "query": opt(r.get("query"), 500),
         }
         for r in rows
     ]
@@ -153,14 +153,14 @@ def list_locks(conn: Any) -> dict:
     locks = [
         {
             "pid": r.get("pid"),
-            "username": s(r.get("username"), 128),
-            "database": s(r.get("database"), 128),
+            "username": opt(r.get("username"), 128),
+            "database": opt(r.get("database"), 128),
             "lockType": s(r.get("locktype"), 64),
             "mode": s(r.get("mode"), 64),
             "granted": bool(r.get("granted")),
             "object": s(r.get("object"), 128),
-            "waitEventType": s(r.get("wait_event_type"), 64),
-            "query": s(r.get("query"), 300),
+            "waitEventType": opt(r.get("wait_event_type"), 64),
+            "query": opt(r.get("query"), 300),
         }
         for r in rows
     ]
@@ -179,15 +179,15 @@ def blocking_pairs(conn: Any) -> list[dict]:
     return [
         {
             "blockedPid": r.get("blocked_pid"),
-            "blockedUser": s(r.get("blocked_user"), 128),
-            "database": s(r.get("database"), 128),
-            "waitEventType": s(r.get("wait_event_type"), 64),
-            "waitEvent": s(r.get("wait_event"), 64),
-            "blockedQuery": s(r.get("blocked_query"), 300),
+            "blockedUser": opt(r.get("blocked_user"), 128),
+            "database": opt(r.get("database"), 128),
+            "waitEventType": opt(r.get("wait_event_type"), 64),
+            "waitEvent": opt(r.get("wait_event"), 64),
+            "blockedQuery": opt(r.get("blocked_query"), 300),
             "blockingPid": r.get("blocking_pid"),
-            "blockingUser": s(r.get("blocking_user"), 128),
-            "blockingState": s(r.get("blocking_state"), 64),
-            "blockingQuery": s(r.get("blocking_query"), 300),
+            "blockingUser": opt(r.get("blocking_user"), 128),
+            "blockingState": opt(r.get("blocking_state"), 64),
+            "blockingQuery": opt(r.get("blocking_query"), 300),
         }
         for r in rows
     ]

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from postgres_aiops.ops._util import order_column, s
+from postgres_aiops.ops._util import opt, order_column
 
 _TOP_SQL = """
 SELECT queryid,
@@ -40,7 +40,7 @@ def _statement_row(r: dict) -> dict:
     cache_hit_ratio = round(100.0 * hit / total_blks, 2) if total_blks else None
     return {
         "queryId": r.get("queryid"),
-        "query": s(r.get("query"), 400),
+        "query": opt(r.get("query"), 400),
         "calls": r.get("calls"),
         "totalExecTimeMs": float(r.get("total_exec_time_ms") or 0),
         "meanExecTimeMs": float(r.get("mean_exec_time_ms") or 0),
@@ -60,14 +60,29 @@ def top_queries(conn: Any, order_by: str = "total_time", limit: int = 20) -> dic
 
     ``order_by`` is one of total_time, mean_time, calls, rows, io — mapped to a
     real column through a whitelist, so no caller text ever reaches the ORDER BY.
+
+    Returns an envelope rather than a bare list::
+
+        {"statements": [...], "returned": N, "limit": L, "truncated": true}
+
+    so a truncated read announces itself. A bare list cannot say "there is
+    more" — the consumer has to infer it from the length happening to equal the
+    limit, and a smaller local model faced with a long result tends to report
+    that nothing came back at all. One extra row is requested so ``truncated``
+    is *measured* rather than guessed from a length coincidence.
     """
     col = order_column(order_by)  # validated → safe to interpolate below
     sql = _TOP_SQL.format(col=col)  # nosec B608 — col is whitelisted, not user text
-    rows = conn.query(sql, {"limit": max(1, min(int(limit), 200))})
+    requested = max(1, min(int(limit), 200))
+    rows = list(conn.query(sql, {"limit": requested + 1}))
+    truncated = len(rows) > requested
+    statements = [_statement_row(r) for r in rows[:requested]]
     return {
         "orderBy": order_by,
-        "count": len(rows),
-        "statements": [_statement_row(r) for r in rows],
+        "statements": statements,
+        "returned": len(statements),
+        "limit": requested,
+        "truncated": truncated,
         "note": (
             "Requires the pg_stat_statements extension. Times are milliseconds; "
             "cacheHitRatioPct is shared_blks_hit / (hit + read)."

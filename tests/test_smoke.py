@@ -133,6 +133,9 @@ def test_every_mcp_tool_is_governed_by_harness():
     from mcp_server import _shared
 
     tool_objs = _shared.mcp._tool_manager._tools
+    assert len(tool_objs) == 35, (
+        "tool count changed — update README/SKILL/server.json too"
+    )
     assert EXPECTED_TOOLS <= set(tool_objs), "tool registry incomplete"
     for name, tool in tool_objs.items():
         fn = getattr(tool, "fn", None)

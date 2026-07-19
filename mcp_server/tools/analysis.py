@@ -34,14 +34,22 @@ def slow_query_rca(
         target: Target name from config; omit for the default.
     """
     conn = None
+    source: dict = {}
     if statements is None:
         conn = _get_connection(target)
-        statements = query_ops.top_queries(conn, order_by="total_time", limit=limit)["statements"]
+        source = query_ops.top_queries(conn, order_by="total_time", limit=limit)
+        statements = source["statements"]
     explain = None
     if explain_sql:
         conn = conn or _get_connection(target)
         explain = query_ops.explain_query(conn, explain_sql, analyze=False)
-    return ops.slow_query_rca(statements, explain=explain)
+    result = ops.slow_query_rca(statements, explain=explain)
+    # The RCA reads a top-N; if that top-N was itself cut short the verdict is
+    # drawn from a partial view. Say so rather than let it read as complete.
+    if source:
+        result["sourceTruncated"] = source["truncated"]
+        result["sourceLimit"] = source["limit"]
+    return result
 
 
 @mcp.tool()
@@ -62,9 +70,15 @@ def bloat_and_vacuum_analysis(
         limit: How many tables to pull when not injected (default 50).
         target: Target name from config; omit for the default.
     """
+    source: dict = {}
     if tables is None:
-        tables = table_ops.table_bloat(_get_connection(target), limit=limit)["tables"]
-    return ops.bloat_and_vacuum_analysis(tables)
+        source = table_ops.table_bloat(_get_connection(target), limit=limit)
+        tables = source["tables"]
+    result = ops.bloat_and_vacuum_analysis(tables)
+    if source:
+        result["sourceTruncated"] = source["truncated"]
+        result["sourceLimit"] = source["limit"]
+    return result
 
 
 @mcp.tool()

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from postgres_aiops.ops._util import human_bytes, s
+from postgres_aiops.ops._util import human_bytes, opt, s
 
 _REPLICATION_SQL = """
 SELECT pid,
@@ -73,13 +73,13 @@ def replication_status(conn: Any) -> dict:
         {
             "pid": r.get("pid"),
             "username": s(r.get("username"), 128),
-            "applicationName": s(r.get("application_name"), 128),
-            "clientAddr": s(r.get("client_addr"), 64),
-            "state": s(r.get("state"), 32),
-            "syncState": s(r.get("sync_state"), 32),
-            "sentLsn": s(r.get("sent_lsn"), 32),
-            "replayLsn": s(r.get("replay_lsn"), 32),
-            "replayLag": s(r.get("replay_lag"), 64),
+            "applicationName": opt(r.get("application_name"), 128),
+            "clientAddr": opt(r.get("client_addr"), 64),
+            "state": opt(r.get("state"), 32),
+            "syncState": opt(r.get("sync_state"), 32),
+            "sentLsn": opt(r.get("sent_lsn"), 32),
+            "replayLsn": opt(r.get("replay_lsn"), 32),
+            "replayLag": opt(r.get("replay_lag"), 64),
             "replayLagBytes": r.get("replay_lag_bytes"),
             "replayLagPretty": human_bytes(r.get("replay_lag_bytes")),
         }
@@ -98,13 +98,13 @@ def replication_slots(conn: Any) -> dict:
     slots = [
         {
             "slotName": s(r.get("slot_name"), 128),
-            "plugin": s(r.get("plugin"), 64),
+            "plugin": opt(r.get("plugin"), 64),
             "slotType": s(r.get("slot_type"), 32),
-            "database": s(r.get("database"), 128),
+            "database": opt(r.get("database"), 128),
             "active": bool(r.get("active")),
             "activePid": r.get("active_pid"),
-            "restartLsn": s(r.get("restart_lsn"), 32),
-            "walStatus": s(r.get("wal_status"), 32),
+            "restartLsn": opt(r.get("restart_lsn"), 32),
+            "walStatus": opt(r.get("wal_status"), 32),
             "retainedBytes": r.get("retained_bytes"),
             "retainedPretty": human_bytes(r.get("retained_bytes")),
         }
@@ -130,15 +130,15 @@ def wal_status(conn: Any) -> dict:
     return {
         "inRecovery": bool(wal.get("in_recovery")),
         "currentLsn": s(wal.get("current_lsn"), 32),
-        "currentWalFile": s(wal.get("current_wal_file"), 64),
+        "currentWalFile": opt(wal.get("current_wal_file"), 64),
         "walLevel": s(wal.get("wal_level"), 32),
         "maxWalSize": s(wal.get("max_wal_size"), 32),
         "minWalSize": s(wal.get("min_wal_size"), 32),
         "archiveMode": s(wal.get("archive_mode"), 32),
         "archiver": {
             "archivedCount": arch.get("archived_count"),
-            "lastArchivedWal": s(arch.get("last_archived_wal"), 64),
+            "lastArchivedWal": opt(arch.get("last_archived_wal"), 64),
             "failedCount": arch.get("failed_count"),
-            "lastFailedWal": s(arch.get("last_failed_wal"), 64),
+            "lastFailedWal": opt(arch.get("last_failed_wal"), 64),
         },
     }

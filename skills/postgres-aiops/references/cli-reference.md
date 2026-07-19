@@ -1,7 +1,7 @@
 # postgres-aiops CLI reference
 
-> Preview / mock-only. Catalog / `pg_stat_*` queries are modelled from documented
-> shapes and need live verification.
+> Catalog / `pg_stat_*` queries have been exercised against a live PostgreSQL 16.14 instance
+> (see docs/VERIFICATION.md).
 
 ## Setup & diagnostics
 
@@ -40,19 +40,19 @@ postgres-aiops query explain "<sql>" [--analyze]
 
 postgres-aiops index unused                   # zero-scan indexes
 postgres-aiops index missing                  # missing-index hints
-postgres-aiops index bloat
+postgres-aiops index bloat [--limit 50]
 postgres-aiops index invalid                  # invalid + duplicate
 
-postgres-aiops table sizes
-postgres-aiops table bloat                    # dead-tuple bloat proxy
-postgres-aiops table autovacuum
+postgres-aiops table sizes [--limit 20]
+postgres-aiops table bloat [--limit 50]       # dead-tuple bloat proxy
+postgres-aiops table autovacuum [--limit 50]
 
 postgres-aiops repl status                    # standby lag
 postgres-aiops repl slots
 postgres-aiops repl wal
 
-postgres-aiops analyze slow-query [--explain "<sql>"]   # flagship RCA
-postgres-aiops analyze bloat-vacuum
+postgres-aiops analyze slow-query [--explain "<sql>"] [--limit 20]   # flagship RCA
+postgres-aiops analyze bloat-vacuum [--limit 50]
 postgres-aiops analyze blocking
 ```
 
@@ -74,3 +74,23 @@ postgres-aiops remediate set <name> <value> [--dry-run]                  # (medi
 - `--target, -t <name>` — target name from `config.yaml` (omit to use the default/first target)
 - `--dry-run` — print the statement that would run, change nothing
 - State-changing commands require two confirmations at the CLI layer
+
+## Truncation
+
+Every command that takes `--limit` returns an envelope — `{"...": [...],
+"returned": N, "limit": L, "truncated": bool}` — and fetches one row past the
+limit so `truncated` is measured, not inferred from the row count. When a read
+is cut short the JSON on stdout stays clean and a notice is written to stderr:
+
+```
+… truncated at 50 rows (50 returned) — re-run with a higher --limit to see the rest.
+```
+
+`analyze slow-query` / `analyze bloat-vacuum` pull a limited read themselves, so
+they also report `sourceTruncated` / `sourceLimit` when their input was partial.
+
+## Read-only mode
+
+`export POSTGRES_READ_ONLY=1` unregisters all 10 write tools from the MCP server
+and makes the governance harness refuse any non-read call, including from the
+CLI. See [agent-guardrails.md](agent-guardrails.md).

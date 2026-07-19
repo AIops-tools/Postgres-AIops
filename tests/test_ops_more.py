@@ -67,9 +67,11 @@ def test_table_sizes_clamps_limit_and_shapes():
          "index_bytes": 1024, "toast_bytes": 0, "est_rows": 500},
     ]})
     out = tables.table_sizes(conn, limit=9999)
-    assert out["count"] == 1 and out["tables"][0]["totalPretty"] == "3.0 kB"
+    assert out["returned"] == 1 and out["tables"][0]["totalPretty"] == "3.0 kB"
+    assert out["limit"] == 500 and out["truncated"] is False
     _, params = conn.queried[0]
-    assert params == {"limit": 500}  # clamped to the 500 ceiling
+    # clamped to the 500 ceiling, then +1 so truncation is measured not guessed
+    assert params == {"limit": 501}
 
 
 @pytest.mark.unit

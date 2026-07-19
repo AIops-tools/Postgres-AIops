@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from postgres_aiops.ops._util import qualify, quote_ident, quote_literal, s
+from postgres_aiops.ops._util import opt, qualify, quote_ident, quote_literal, s
 
 _INDEX_METHODS = {"btree", "hash", "gist", "gin", "brin", "spgist"}
 _REINDEX_KINDS = {"INDEX", "TABLE", "SCHEMA"}
@@ -40,10 +40,10 @@ def _capture_backend(conn: Any, pid: int) -> dict:
     ) or {}
     return {
         "pid": row.get("pid"),
-        "username": s(row.get("username"), 128),
-        "database": s(row.get("database"), 128),
-        "state": s(row.get("state"), 64),
-        "query": s(row.get("query"), 500),
+        "username": opt(row.get("username"), 128),
+        "database": opt(row.get("database"), 128),
+        "state": opt(row.get("state"), 64),
+        "query": opt(row.get("query"), 500),
     }
 
 
@@ -85,8 +85,8 @@ def _capture_table_stats(conn: Any, table: str) -> dict:
     return {
         "deadTuples": row.get("n_dead_tup"),
         "liveTuples": row.get("n_live_tup"),
-        "lastVacuum": s(row.get("last_vacuum"), 64),
-        "lastAnalyze": s(row.get("last_analyze"), 64),
+        "lastVacuum": opt(row.get("last_vacuum"), 64),
+        "lastAnalyze": opt(row.get("last_analyze"), 64),
     }
 
 
@@ -255,7 +255,7 @@ def update_setting(conn: Any, name: str, value: str) -> dict:
         "newValue": str(value),
         "priorState": {
             "value": s(prior.get("setting"), 256),
-            "unit": s(prior.get("unit"), 32),
+            "unit": opt(prior.get("unit"), 32),
             "context": s(prior.get("context"), 32),
         },
         "reloadRequired": True,
