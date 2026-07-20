@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.0 — 2026-07-20
+
+### Fixed
+- **`terminate_backend` / `cancel_query` refuse this tool's own backend**, and `update_setting` refuses the postmaster settings that would strand the undo at the next restart (`listen_addresses`, `port`, `max_connections`, `ssl`, `hba_file`, …).
+- A connection lost **mid-statement** now raises a dedicated error and is audited as `unknown`, not `error`..
+- Harness: a write whose response is lost is audited `status=unknown`, not `error` — it may have taken effect. Undo tokens gain `effectVerified` (undo.db migrated in place).
+- Harness: a dry-run no longer records an undo token, and no longer requires a named approver. Guards now run on the preview path.
+- Truncated strings end in an ellipsis instead of being cut silently; error messages are capped at 800 chars, not 300.
+
+See RELEASE_NOTES.md for the full detail.
+
 ## v0.3.0 — 2026-07-17
 
 ### Added

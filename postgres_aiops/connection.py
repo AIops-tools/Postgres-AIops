@@ -41,6 +41,24 @@ class PgError(Exception):
         super().__init__(message)
 
 
+class PgConnectionLostError(PgError):
+    """An ESTABLISHED connection dropped while a statement was running.
+
+    Distinct from an ordinary failure because the outcome is genuinely
+    undetermined: the statement may have committed before the link died.
+    PostgreSQL rolls back on backend termination, so usually nothing landed —
+    but a COMMIT whose acknowledgement was lost did land, and from here the two
+    are indistinguishable. The MCP layer maps this to ``status=unknown`` rather
+    than asserting a failure it cannot vouch for.
+
+    Note the discriminator is WHERE it was raised, not the class or sqlstate:
+    psycopg reports both "could not connect" and "server closed the connection
+    unexpectedly" as ``OperationalError``, and a client-side detection of a
+    dropped link carries no sqlstate at all — so position is the only reliable
+    signal.
+    """
+
+
 def _teaching_message(exc: psycopg.Error, target: TargetConfig) -> str:
     """Map a psycopg error to an actionable, teaching message."""
     sqlstate = getattr(exc, "sqlstate", None)
@@ -124,7 +142,11 @@ class PgConnection:
                 cur.execute(sql, params)
                 return getattr(cur, "statusmessage", "") or "OK"
         except psycopg.Error as exc:
-            raise PgError(
+            # Reached only on an established connection, so an OperationalError
+            # here means the link died mid-statement — not that we failed to
+            # reach the server.
+            cls = PgConnectionLostError if isinstance(exc, psycopg.OperationalError) else PgError
+            raise cls(
                 _teaching_message(exc, self._target),
                 sqlstate=getattr(exc, "sqlstate", None),
             ) from exc

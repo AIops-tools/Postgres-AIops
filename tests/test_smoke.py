@@ -170,7 +170,7 @@ def test_drop_index_records_undo_from_captured_indexdef(monkeypatch):
     recorded = {}
 
     class _Store:
-        def record(self, *, skill, tool, undo_descriptor, orig_params):
+        def record(self, *, skill, tool, undo_descriptor, orig_params, effect_verified=True):
             recorded["descriptor"] = undo_descriptor
             return "undo-1"
 
@@ -195,7 +195,7 @@ def test_create_index_undo_drops_created_name(monkeypatch):
     recorded = {}
 
     class _Store:
-        def record(self, *, skill, tool, undo_descriptor, orig_params):
+        def record(self, *, skill, tool, undo_descriptor, orig_params, effect_verified=True):
             recorded["descriptor"] = undo_descriptor
             return "undo-2"
 

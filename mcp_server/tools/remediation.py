@@ -73,12 +73,18 @@ def terminate_backend(pid: int, dry_run: bool = False, target: Optional[str] = N
     Captures the backend's pid + query for the audit trail; a terminate cannot be
     undone, so no undo is offered. Pass dry_run=True to preview.
 
+    Refuses this tool's own backend pid — including under dry_run, which must
+    report a refusal rather than preview a call that will be refused.
+
     Args:
         pid: Backend process id (from list_activity).
         dry_run: If True, preview without terminating.
         target: Target name from config; omit for the default.
     """
     conn = _get_connection(target)
+    # Ahead of the dry_run return: a preview whose real call would be refused
+    # must say so, or the caller reads the refusal as transient and retries.
+    ops.guard_terminate_backend(conn, pid, "terminate_backend")
     if dry_run:
         return {"dryRun": True, "wouldTerminate": {"pid": pid}}
     return ops.terminate_backend(conn, pid)
@@ -93,12 +99,16 @@ def cancel_query(pid: int, dry_run: bool = False, target: Optional[str] = None) 
     Captures the backend's pid + query for audit; a cancel has no undo. Pass
     dry_run=True to preview.
 
+    Refuses this tool's own backend pid — the query it would cancel is this very
+    call. Enforced under dry_run too.
+
     Args:
         pid: Backend process id (from list_activity).
         dry_run: If True, preview without cancelling.
         target: Target name from config; omit for the default.
     """
     conn = _get_connection(target)
+    ops.guard_terminate_backend(conn, pid, "cancel_query")
     if dry_run:
         return {"dryRun": True, "wouldCancel": {"pid": pid}}
     return ops.cancel_query(conn, pid)
@@ -283,6 +293,11 @@ def update_setting(
     performed automatically. The prior value is captured so the harness records an
     undo that sets it back. Pass dry_run=True to preview.
 
+    Refuses the connection-affecting postmaster settings (listen_addresses,
+    port, max_connections, superuser_reserved_connections, ssl, hba_file):
+    nothing breaks now, but the operator's next restart applies them and strands
+    the undo. Enforced under dry_run too.
+
     Args:
         name: The configuration parameter name (e.g. work_mem).
         value: The new value (as a string).
@@ -290,6 +305,9 @@ def update_setting(
         target: Target name from config; omit for the default.
     """
     conn = _get_connection(target)
+    # Static denylist, so this costs nothing and cannot diverge from the real
+    # call — a preview of a refused setting must report the refusal.
+    ops.guard_update_setting(name)
     if dry_run:
         return {"dryRun": True, "wouldSet": {"name": name, "value": value}}
     return ops.update_setting(conn, name, value)

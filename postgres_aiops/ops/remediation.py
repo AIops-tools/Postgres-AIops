@@ -12,6 +12,18 @@ Irreversible ops (``terminate_backend``, ``cancel_query``, ``run_vacuum``,
 ``run_analyze``, ``reindex``, ``reset_query_stats``) capture prior stats for the
 audit trail but declare no undo.
 
+Two writes additionally refuse targets that would destroy their own
+reversibility (:class:`SelfLockout`):
+
+  * ``terminate_backend`` / ``cancel_query`` refuse this connection's own pid.
+    ``ops/activity.py`` already hides it from every read (``WHERE pid <>
+    pg_backend_pid()``); the writes have to honour the same boundary, or the one
+    backend an agent can reach by guessing is the one it is calling through.
+  * ``update_setting`` refuses the connection-affecting postmaster settings.
+    ``ALTER SYSTEM`` only writes postgresql.auto.conf, so nothing breaks at the
+    moment of the call — this tool never reloads. The damage lands on the
+    operator's next restart, by which time the recorded undo is stranded.
+
 Values (pids, setting values) are bound parameters. The few identifiers that
 cannot be parameterised (table/index names, GUC names) are validated and quoted
 via :mod:`postgres_aiops.ops._util` before the single-line interpolation site.
@@ -28,8 +40,65 @@ _INDEX_METHODS = {"btree", "hash", "gist", "gin", "brin", "spgist"}
 _REINDEX_KINDS = {"INDEX", "TABLE", "SCHEMA"}
 _SETTING_NAME_RE = re.compile(r"^[a-z_][a-z0-9_.]*$")
 
+# Postmaster-context settings that decide whether a client can connect at all.
+# Unlike MySQL's SET GLOBAL these do not bite immediately — ALTER SYSTEM writes
+# postgresql.auto.conf and this tool never reloads. That is exactly what makes
+# them insidious: the call looks clean, the undo sits in the store looking
+# replayable, and the operator's next restart strands it. The list is STATIC
+# (no runtime detection), so there is no fail-open case.
+_SELF_AFFECTING_SETTINGS: dict[str, str] = {
+    "listen_addresses": "it decides which interfaces accept connections at all",
+    "port": "it moves the listener, so every later connection goes to the wrong place",
+    "max_connections": "it can be set below the live connection count, refusing new backends",
+    "superuser_reserved_connections": (
+        "it can reserve every available slot, refusing ordinary logins"
+    ),
+    "ssl": "it changes whether this connection's transport is even offered",
+    "hba_file": "it repoints host-based auth, this tool's own rule included",
+}
+
+
+class SelfLockout(ValueError):  # noqa: N818 — teaching error, reads as a statement
+    """Refused: the operation would cut this tool off from the server it manages."""
+
 
 # ── activity control (irreversible) ─────────────────────────────────────────
+
+
+def _own_backend_pid(conn: Any) -> int | None:
+    """This connection's own backend pid, or None when it cannot be determined.
+
+    ``None`` means UNKNOWN and must never be read as "it is me" — callers fail
+    open, because refusing a legitimate terminate on a failed probe would be a
+    new bug, while the read path (``activity.py``) already filters the same pid.
+    """
+    try:
+        own = conn.scalar("SELECT pg_backend_pid()")
+        return int(own) if own is not None else None
+    except Exception:  # noqa: BLE001 — unknown identity, never a false "it is me"
+        return None
+
+
+def guard_terminate_backend(conn: Any, pid: int, action: str = "terminate_backend") -> None:
+    """Raise the :class:`SelfLockout` a self-targeted terminate would raise, without acting.
+
+    Called by ``terminate_backend`` / ``cancel_query`` themselves *and* by the
+    MCP wrappers ahead of their ``dry_run`` early return, so a preview of a
+    self-terminate reports the refusal instead of a green ``wouldTerminate``.
+    Both paths run this one function, so preview and real call cannot disagree.
+
+    Fails open on an undeterminable pid: unknown is never treated as "it is me".
+    """
+    own = _own_backend_pid(conn)
+    if own is None or int(pid) != own:
+        return
+    raise SelfLockout(
+        f"Refusing {action} on pid {int(pid)}: that is the backend this tool is "
+        f"calling through. Terminating it kills the very statement issuing the "
+        f"call and drops the session the audit row is written from. "
+        f"list_activity already excludes it — pick a pid from there, or use a "
+        f"separate psql session if you really must terminate this one."
+    )
 
 
 def _capture_backend(conn: Any, pid: int) -> dict:
@@ -48,7 +117,14 @@ def _capture_backend(conn: Any, pid: int) -> dict:
 
 
 def terminate_backend(conn: Any, pid: int) -> dict:
-    """[WRITE] Terminate a backend (pg_terminate_backend). No safe inverse."""
+    """[WRITE] Terminate a backend (pg_terminate_backend). No safe inverse.
+
+    **Refuses this connection's own pid** — a terminate has no undo, and aiming
+    it at the caller's own backend destroys the statement issuing it. If the pid
+    cannot be determined the call proceeds (unknown is never treated as "it is
+    me").
+    """
+    guard_terminate_backend(conn, pid, "terminate_backend")
     prior = _capture_backend(conn, pid)
     terminated = conn.scalar("SELECT pg_terminate_backend(%(pid)s)", {"pid": int(pid)})
     return {
@@ -60,7 +136,12 @@ def terminate_backend(conn: Any, pid: int) -> dict:
 
 
 def cancel_query(conn: Any, pid: int) -> dict:
-    """[WRITE] Cancel a backend's running query (pg_cancel_backend). No inverse."""
+    """[WRITE] Cancel a backend's running query (pg_cancel_backend). No inverse.
+
+    **Refuses this connection's own pid** — the query it would cancel is this
+    very call. If the pid cannot be determined the call proceeds.
+    """
+    guard_terminate_backend(conn, pid, "cancel_query")
     prior = _capture_backend(conn, pid)
     cancelled = conn.scalar("SELECT pg_cancel_backend(%(pid)s)", {"pid": int(pid)})
     return {
@@ -233,13 +314,44 @@ def _validate_setting_name(name: str) -> str:
     return name
 
 
+def guard_update_setting(name: str) -> None:
+    """Raise the :class:`SelfLockout` ``update_setting`` would raise, without any I/O.
+
+    Called by ``update_setting`` itself *and* by the MCP wrapper ahead of its
+    ``dry_run`` early return, so a preview of a denylisted setting reports the
+    refusal instead of a green ``wouldSet``. The denylist is static, so the
+    preview and the real call cannot diverge and the guard costs nothing.
+
+    Normalises the name itself, so it cannot be side-stepped by case or padding
+    on either path.
+    """
+    setting = str(name).strip().lower()
+    lockout_reason = _SELF_AFFECTING_SETTINGS.get(setting)
+    if lockout_reason is None:
+        return
+    raise SelfLockout(
+        f"Refusing ALTER SYSTEM SET {setting}: {lockout_reason}. Nothing breaks "
+        f"now — this tool never reloads — but the value is written to "
+        f"postgresql.auto.conf, so your next restart applies it and the undo "
+        f"recorded here can no longer connect to replay itself. Edit "
+        f"postgresql.conf directly, where you have console access to recover."
+    )
+
+
 def update_setting(conn: Any, name: str, value: str) -> dict:
     """[WRITE] ALTER SYSTEM SET a parameter. Reversible: captures the prior value.
 
     Writes to postgresql.auto.conf; most parameters need ``SELECT pg_reload_conf()``
     (or a restart for ``pending_restart`` ones) to take effect — this is reported
     but NOT performed automatically.
+
+    **Refuses the connection-affecting postmaster settings**
+    (``listen_addresses``, ``port``, ``max_connections``,
+    ``superuser_reserved_connections``, ``ssl``, ``hba_file``). Those are the
+    ones whose delayed application strands the undo: the write looks clean, and
+    the operator's next restart is what locks the tool out.
     """
+    guard_update_setting(name)
     setting_name = _validate_setting_name(name)
     prior = conn.query_one(
         "SELECT setting, unit, context, pending_restart FROM pg_settings WHERE name = %(n)s",

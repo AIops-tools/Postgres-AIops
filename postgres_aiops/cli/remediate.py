@@ -13,6 +13,7 @@ from postgres_aiops.cli._common import (
     cli_errors,
     console,
     double_confirm,
+    dry_run_preview,
     dry_run_print,
 )
 
@@ -31,13 +32,17 @@ def remediate_terminate(
     dry_run: DryRunOption = False,
 ) -> None:
     """Terminate a backend (no undo; dry-run + confirm)."""
-    if dry_run:
-        dry_run_print(operation="terminate_backend",
-                      api_call="SELECT pg_terminate_backend(pid)", parameters={"pid": pid})
-        return
-    double_confirm("terminate backend", str(pid))
     from mcp_server.tools import remediation as gov
 
+    if dry_run:
+        # Through the governed call: terminate_backend refuses this tool's own
+        # pid, so a preview must report that rather than a green banner.
+        dry_run_preview(
+            gov.terminate_backend(pid=pid, dry_run=True, target=target),
+            operation="terminate_backend",
+            api_call="SELECT pg_terminate_backend(pid)", parameters={"pid": pid})
+        return
+    double_confirm("terminate backend", str(pid))
     console.print_json(json.dumps(gov.terminate_backend(pid=pid, target=target)))
 
 
@@ -49,13 +54,15 @@ def remediate_cancel(
     dry_run: DryRunOption = False,
 ) -> None:
     """Cancel a backend's running query (no undo; dry-run + confirm)."""
-    if dry_run:
-        dry_run_print(operation="cancel_query",
-                      api_call="SELECT pg_cancel_backend(pid)", parameters={"pid": pid})
-        return
-    double_confirm("cancel query on backend", str(pid))
     from mcp_server.tools import remediation as gov
 
+    if dry_run:
+        dry_run_preview(
+            gov.cancel_query(pid=pid, dry_run=True, target=target),
+            operation="cancel_query",
+            api_call="SELECT pg_cancel_backend(pid)", parameters={"pid": pid})
+        return
+    double_confirm("cancel query on backend", str(pid))
     console.print_json(json.dumps(gov.cancel_query(pid=pid, target=target)))
 
 
@@ -169,11 +176,15 @@ def remediate_set(
     dry_run: DryRunOption = False,
 ) -> None:
     """ALTER SYSTEM SET a parameter (reversible; dry-run + confirm)."""
-    if dry_run:
-        dry_run_print(operation="update_setting",
-                      api_call=f"ALTER SYSTEM SET {name} = ...", parameters={"value": value})
-        return
-    double_confirm(f"ALTER SYSTEM SET {name} =", value)
     from mcp_server.tools import remediation as gov
 
+    if dry_run:
+        # Through the governed call: update_setting refuses the
+        # connection-affecting postmaster settings, so a preview must report it.
+        dry_run_preview(
+            gov.update_setting(name=name, value=value, dry_run=True, target=target),
+            operation="update_setting",
+            api_call=f"ALTER SYSTEM SET {name} = ...", parameters={"value": value})
+        return
+    double_confirm(f"ALTER SYSTEM SET {name} =", value)
     console.print_json(json.dumps(gov.update_setting(name=name, value=value, target=target)))
