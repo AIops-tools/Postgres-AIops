@@ -5,6 +5,11 @@ functions in ``mcp_server.tools``. These tests drive a write command PAST the
 dry-run branch and the double-confirm prompts and assert the call really went
 through the governed path (audit row on disk) — the regression test for the
 "CLI writes were unaudited" line-wide fix.
+
+The dry-run branch now routes through that same governed twin, so it too lands
+an audit row. The invariant a preview must hold is not "makes no call" but
+**a dry_run MAY read; it must never write** — for this SQL tool, never a
+statement that mutates.
 """
 
 from __future__ import annotations
@@ -40,7 +45,14 @@ def _audit_tools(db_path) -> list[str]:
 
 
 @pytest.mark.unit
-def test_cli_query_reset_dry_run_makes_no_call_and_no_audit(gov_home, monkeypatch, fake_pg):
+def test_cli_query_reset_dry_run_never_writes_but_is_audited(gov_home, monkeypatch, fake_pg):
+    """A dry_run MAY read; it must never write — and it IS audited.
+
+    The preview routes through the governed twin, so it lands an audit row
+    exactly as the MCP path has always done. What it must never do is mutate:
+    for this SQL tool that means no statement that mutates, i.e. neither an
+    ``execute`` nor a ``pg_stat_statements_reset()`` on the read channel.
+    """
     from postgres_aiops.cli import app
 
     fake = fake_pg()
@@ -50,8 +62,9 @@ def test_cli_query_reset_dry_run_makes_no_call_and_no_audit(gov_home, monkeypatc
     result = CliRunner().invoke(app, ["query", "reset", "--dry-run"])
     assert result.exit_code == 0
     assert "DRY-RUN" in result.output
-    assert fake.executed == [] and fake.queried == []
-    assert not (gov_home / "audit.db").exists()
+    assert fake.executed == [], f"a dry-run must never execute a statement: {fake.executed}"
+    assert [sql for sql, _ in fake.queried if "pg_stat_statements_reset" in sql] == []
+    assert _audit_tools(gov_home / "audit.db") == ["reset_query_stats"]
 
 
 @pytest.mark.unit
@@ -81,3 +94,23 @@ def test_cli_query_reset_aborts_without_double_confirm(gov_home, monkeypatch, fa
     assert result.exit_code != 0
     assert fake.executed == [] and fake.queried == []
     assert not (gov_home / "audit.db").exists()
+
+
+# ── refusals must teach, not traceback ────────────────────────────────────────
+#
+# ``PolicyDenied``/``BudgetExceeded`` are raised by ``@governed_tool`` OUTSIDE the
+# tool body, so ``tool_errors`` never flattens them into ``{"error": ...}`` and
+# ``dry_run_preview``'s dict check cannot see them. Before they were listed in
+# ``_cli_error_types`` a refused preview reached the operator as a raw traceback:
+# the teaching text was in there, buried under a stack dump. A weak model reads
+# that as a crash and retries — the very loop the preview reroute exists to stop.
+
+
+def test_cli_error_types_covers_governance_refusals() -> None:
+    """A governance refusal must be translated, not dumped as a traceback."""
+    from postgres_aiops.cli._common import _cli_error_types
+    from postgres_aiops.governance import BudgetExceeded, PolicyDenied
+
+    types = _cli_error_types()
+    assert PolicyDenied in types
+    assert BudgetExceeded in types

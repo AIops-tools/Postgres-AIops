@@ -104,20 +104,56 @@ def _validate_statement(sql: str) -> str:
     return text
 
 
+# First keyword of the statement forms EXPLAIN (ANALYZE) may safely execute:
+# these do not modify data. WITH is excluded deliberately — a CTE can contain a
+# data-modifying INSERT/UPDATE/DELETE, so it is not safe under ANALYZE.
+_READ_ONLY_LEADERS = ("select", "table", "values", "show")
+
+
+def _assert_read_only_for_analyze(statement: str) -> None:
+    """Refuse EXPLAIN ANALYZE on anything that could modify data.
+
+    ANALYZE *executes* the statement to collect real timings, so an
+    ``EXPLAIN (ANALYZE) DELETE ...`` would run the DELETE. This tool guarantees
+    ``explain_query`` is read-only — enforce it rather than trust the docstring.
+    """
+    leader = statement.lstrip("( \t\n").split(None, 1)[0].lower() if statement.strip() else ""
+    if leader not in _READ_ONLY_LEADERS:
+        raise ValueError(
+            f"EXPLAIN ANALYZE executes the statement, so it is refused for a "
+            f"'{leader.upper() or '?'}' statement, which could modify data. Use "
+            f"analyze=False to see the plan without executing, or run a SELECT."
+        )
+
+
 def explain_query(conn: Any, sql: str, analyze: bool = False) -> dict:
     """[READ] Return the JSON execution plan for ``sql`` (EXPLAIN).
 
     ``analyze=False`` (default) plans without executing. ``analyze=True`` runs the
-    statement to collect real row counts/timing — only use it for read-only SQL,
-    since ANALYZE executes side effects. The statement is validated to be a
-    single statement before it is placed into the EXPLAIN command.
+    statement to collect real row counts/timing, so it is **refused** for anything
+    but a read-only statement (SELECT / TABLE / VALUES / SHOW) — this stays a
+    genuine ``[READ]``. The statement is validated to be a single statement first.
     """
     statement = _validate_statement(sql)
     options = "FORMAT JSON, VERBOSE, BUFFERS"
-    if analyze:
-        options = "ANALYZE, " + options
-    command = f"EXPLAIN ({options}) {statement}"  # nosec B608 — validated single statement
-    row = conn.query_one(command) or {}
+    if not analyze:
+        command = f"EXPLAIN ({options}) {statement}"  # nosec B608 — validated single statement
+        row = conn.query_one(command) or {}
+    else:
+        # ANALYZE *executes* the statement. The leader check rejects the obvious
+        # DML/DDL, but a SELECT can still create a table (SELECT ... INTO),
+        # advance state (SELECT nextval(...)), or take locks (FOR UPDATE). Run it
+        # inside a transaction that is ROLLED BACK so no side effect can persist —
+        # this is what keeps explain_query a genuine [READ]. All three statements
+        # share the connection's transaction (a fresh cursor per call does not end
+        # it), and ROLLBACK runs even if the EXPLAIN raises.
+        _assert_read_only_for_analyze(statement)
+        command = f"EXPLAIN (ANALYZE, {options}) {statement}"  # nosec B608 — validated
+        conn.execute("BEGIN")
+        try:
+            row = conn.query_one(command) or {}
+        finally:
+            conn.execute("ROLLBACK")
     plan = next(iter(row.values()), None) if row else None
     return {
         "analyze": bool(analyze),

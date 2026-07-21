@@ -111,8 +111,8 @@ def test_undo_apply_unregistered_inverse_errors(gov_home):
 
 @pytest.mark.unit
 def test_cli_undo_apply_dry_run_renders(gov_home):
-    """The `undo apply --dry-run` CLI path must render without error — guards
-    against dry_run_print signature drift across tools (api_call vs detail)."""
+    """An ordinary `undo apply --dry-run` still renders the normal banner —
+    guards against dry_run_preview signature drift across tools."""
     from typer.testing import CliRunner
 
     from postgres_aiops.cli import app
@@ -121,7 +121,43 @@ def test_cli_undo_apply_dry_run_renders(gov_home):
     result = CliRunner().invoke(app, ["undo", "apply", uid, "--dry-run"])
     assert result.exit_code == 0, result.output
     assert "DRY-RUN" in result.output
+    assert "inverse: _undo_probe" in result.output
     assert _CALLS == []
+    assert undo_mod.get_undo_store().get(uid)["status"] == "recorded"
+
+
+@pytest.mark.unit
+def test_cli_undo_apply_dry_run_reports_an_unknown_token(gov_home):
+    """A refused preview exits non-zero and prints no success banner.
+
+    This previously rendered a green banner reading ``inverse: ?`` — the error
+    dict has no ``wouldApply``, so the hand-built banner fell back to a
+    placeholder and claimed the undo was ready to apply.
+    """
+    from typer.testing import CliRunner
+
+    from postgres_aiops.cli import app
+
+    result = CliRunner().invoke(app, ["undo", "apply", "deadbeef", "--dry-run"])
+    assert result.exit_code == 1, result.output
+    assert "DRY-RUN" not in result.output
+    assert "inverse: ?" not in result.output
+    assert "Unknown undo id" in result.output
+    assert _CALLS == []
+
+
+@pytest.mark.unit
+def test_cli_undo_apply_dry_run_reports_an_unregistered_inverse(gov_home):
+    """The other refusal the preview must surface: the inverse tool is gone."""
+    from typer.testing import CliRunner
+
+    from postgres_aiops.cli import app
+
+    uid = _record(undo_tool="no_such_tool_xyz")
+    result = CliRunner().invoke(app, ["undo", "apply", uid, "--dry-run"])
+    assert result.exit_code == 1, result.output
+    assert "DRY-RUN" not in result.output
+    assert "not registered" in result.output
     assert undo_mod.get_undo_store().get(uid)["status"] == "recorded"
 
 

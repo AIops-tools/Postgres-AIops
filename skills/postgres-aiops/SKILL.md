@@ -10,7 +10,7 @@ description: >
   Use this skill whenever the user needs to operate or troubleshoot a PostgreSQL server/cluster as a DBA — a one-shot cluster health overview; server reads (version/uptime, settings, extensions, databases, roles); activity (sessions, idle-in-transaction, long-running queries, locks); query stats (pg_stat_statements top-N, EXPLAIN a statement); index health (unused indexes, missing-index hints, bloat, invalid/duplicate); table health (sizes, dead-tuple bloat, autovacuum status); replication (standby lag, replication slots, WAL); three flagship analyses — slow-query RCA (worst pg_stat_statements entry + EXPLAIN → cause/action), bloat & vacuum analysis (dead tuples + autovacuum lag → recommendation), and blocking lock-chain RCA (build the wait-for tree, name the root blocker); and guarded writes (terminate a backend, cancel a query, VACUUM/ANALYZE, create/drop an index, REINDEX, ALTER SYSTEM SET a parameter, reset query stats).
   Always use this skill for "postgres health check", "why is this query slow", "pg_stat_statements top queries", "EXPLAIN this", "table/index bloat", "which indexes are unused", "missing index", "autovacuum status", "who is blocking whom", "kill the backend holding the lock", "replication lag", "replication slots", "VACUUM this table", "create/drop an index", or "ALTER SYSTEM SET work_mem" when the context is a PostgreSQL database.
   Do NOT use when the target is OT / industrial equipment (Modbus, OPC-UA, PLCs — use industrial-aiops), a hypervisor, a storage appliance, a backup product, a container/cluster orchestrator, or a non-PostgreSQL database (negative routing hints only).
-  Covers common PostgreSQL DBA operations with a built-in governance harness (audit, policy, token budget, undo, risk-tiers). Beyond the mock suite, the reads plus a governed write and its undo have been exercised against a live PostgreSQL 16.14 instance (see docs/VERIFICATION.md).
+  Covers common PostgreSQL DBA operations with a built-in governance harness (audit, token budget, undo, risk-tiers). Beyond the mock suite, the reads plus a governed write and its undo have been exercised against a live PostgreSQL 16.14 instance (see docs/VERIFICATION.md).
 installer:
   kind: uv
   package: postgres-aiops
@@ -19,11 +19,11 @@ allowed-tools:
   - Bash
 metadata: {"openclaw":{"requires":{"env":["POSTGRES_AIOPS_CONFIG"],"bins":["postgres-aiops"],"config":["~/.postgres-aiops/config.yaml","~/.postgres-aiops/secrets.enc"]},"optional":{"env":["POSTGRES_AIOPS_MASTER_PASSWORD"]},"primaryEnv":"POSTGRES_AIOPS_CONFIG","homepage":"https://github.com/AIops-tools/Postgres-AIops","emoji":"🐘","os":["macos","linux"]}}
 compatibility: >
-  Standalone, self-governed PostgreSQL DBA operations. The governance harness (audit, policy, token/runaway budget, undo, risk-tiers) is bundled in the package — no external skill-family dependency. Connects via psycopg 3 and reads the system catalogs and pg_stat_* views.
+  Standalone, self-governed PostgreSQL DBA operations. The governance harness (audit, token/runaway budget, undo, risk-tiers) is bundled in the package — no external skill-family dependency. Connects via psycopg 3 and reads the system catalogs and pg_stat_* views.
   All write operations are audited to a local SQLite DB under ~/.postgres-aiops/ (relocatable via POSTGRES_AIOPS_HOME).
   Credentials: the PostgreSQL role password is stored ENCRYPTED in ~/.postgres-aiops/secrets.enc (Fernet/AES-128 + scrypt-derived key) — never plaintext on disk. Run 'postgres-aiops init' to onboard, or 'postgres-aiops secret set <target>' to add one. The store is unlocked by a master password from POSTGRES_AIOPS_MASTER_PASSWORD (non-interactive/MCP/CI) or an interactive prompt (CLI on a TTY). A legacy plaintext env var PG_<TARGET_NAME_UPPER>_PASSWORD is still honoured as a fallback with a deprecation warning (migrate with 'postgres-aiops secret migrate'). The password is passed to psycopg.connect at connect time and held only in memory; it is never logged or echoed.
   SQL safety: all values are bound query parameters; the few identifiers that cannot be parameterised (table/index/GUC names, ORDER BY columns, index methods) are validated against strict allow-lists and quoted before interpolation. EXPLAIN rejects multi-statement input.
-  State-changing operations require double confirmation at the CLI layer and support --dry-run. All write tools pass through the @governed_tool decorator (pre-check + budget guard + audit + risk-tier gate) and take a dry_run preview. Reversible writes fetch the real before-state first and record a faithful inverse (create_index↔drop_index, where drop captures pg_get_indexdef; update_setting restores the prior value); irreversible ops (terminate/cancel, vacuum/analyze, reindex, reset stats) record prior stats only.
+  State-changing operations require double confirmation at the CLI layer and support --dry-run. All write tools pass through the @governed_tool decorator (budget guard + audit + risk-tier tagging) and take a dry_run preview. Reversible writes fetch the real before-state first and record a faithful inverse (create_index↔drop_index, where drop captures pg_get_indexdef; update_setting restores the prior value); irreversible ops (terminate/cancel, vacuum/analyze, reindex, reset stats) record prior stats only.
   Webhooks: none — no outbound network calls beyond the configured PostgreSQL connection.
   SSL: sslmode follows libpq (default prefer); set require/verify-full on untrusted networks.
   Transitive dependencies: psycopg[binary] (PostgreSQL driver) and the MCP SDK. No post-install scripts or background services.
@@ -34,7 +34,7 @@ compatibility: >
 
 > **Disclaimer**: Community-maintained open-source project, **not affiliated with, endorsed by, or sponsored by the PostgreSQL Global Development Group or any vendor.** "PostgreSQL" and related trademarks belong to their owners. Source at [github.com/AIops-tools/Postgres-AIops](https://github.com/AIops-tools/Postgres-AIops) under the MIT license.
 
-Governed PostgreSQL DBA operations — **35 MCP tools**, every one wrapped with the bundled `@governed_tool` harness: a local unified audit log under `~/.postgres-aiops/`, policy engine, token/runaway budget guard, undo-token recording, and graduated-autonomy risk tiers. The role password is stored **encrypted** (`~/.postgres-aiops/secrets.enc`, Fernet + scrypt) — never plaintext on disk.
+Governed PostgreSQL DBA operations — **35 MCP tools**, every one wrapped with the bundled `@governed_tool` harness: a local unified audit log under `~/.postgres-aiops/`, token/runaway budget guard, undo-token recording, and descriptive risk-tier labels. The role password is stored **encrypted** (`~/.postgres-aiops/secrets.enc`, Fernet + scrypt) — never plaintext on disk.
 
 > **Standalone**: the governance harness is bundled in the package (`postgres_aiops.governance`) — postgres-aiops has no external skill-family dependency. Beyond the mock suite, the reads plus a governed write and its undo have been exercised against a live PostgreSQL 16.14 instance (see `docs/VERIFICATION.md`).
 
@@ -129,9 +129,15 @@ postgres-aiops doctor
 
 ## Governance & Safety
 
-- Every tool is audited to `~/.postgres-aiops/audit.db` (relocatable via `POSTGRES_AIOPS_HOME`).
-- High-risk ops can require a named approver: set `POSTGRES_AUDIT_APPROVED_BY` and `POSTGRES_AUDIT_RATIONALE` (the env-var names the bundled harness reads).
-- **Secure by default (v0.2.0+)**: with no `~/.postgres-aiops/rules.yaml`, high/critical operations are denied unless `POSTGRES_AUDIT_APPROVED_BY` names an approver (set `POSTGRES_AUDIT_RATIONALE` too). `postgres-aiops init` seeds a starter rules.yaml; an operator-authored rules file is honoured as-is.
+The skill delivers reads and writes and records them; it does **not** decide whether a write is
+permitted. That is your agent's judgement, or the permission of the account you connect it with
+(connect with a PostgreSQL role that has no write privileges (a read-only role, or one without
+INSERT/UPDATE/DELETE/DDL) — writes then fail at the server). There is no read-only switch, policy
+file, or approval gate.
+
+- **Audit is the guarantee, and it is not bypassable.** Every operation — MCP and CLI alike — is logged to `~/.postgres-aiops/audit.db` (relocatable via `POSTGRES_AIOPS_HOME`): params, result, status, duration, and the risk tier. The CLI writes the same row the MCP path does.
+- `POSTGRES_AUDIT_APPROVED_BY` / `POSTGRES_AUDIT_RATIONALE` are optional annotations recorded on the audit row (who/why); they are never required and never block.
+- **Runaway guard** — a safety backstop, not authorization: the same call looped in a tight window trips a circuit breaker. Disable with `POSTGRES_RUNAWAY_MAX=0`.
 - Writes support `--dry-run` / `dry_run=True` and double confirmation at the CLI.
 - Reversible writes fetch the real before-state and record an inverse descriptor; irreversible ops (terminate/cancel, vacuum/analyze, reindex, reset stats) record prior stats only.
 - All values are bound query parameters; identifiers that cannot be parameterised are validated and quoted.

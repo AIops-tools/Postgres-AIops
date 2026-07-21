@@ -15,6 +15,22 @@ from typer.testing import CliRunner
 
 from tests.conftest import FakePg
 
+
+@pytest.fixture
+def smoke_gov_home(tmp_path, monkeypatch):
+    """Isolate the harness to a tmp home.
+
+    A CLI dry-run is a governed call now, so it persists an audit row — without
+    this it would land in the developer's real ~/.postgres-aiops.
+    """
+    import postgres_aiops.governance.audit as audit_mod
+
+    monkeypatch.setenv("POSTGRES_AIOPS_HOME", str(tmp_path))
+    audit_mod.reset_engine()
+    yield tmp_path
+    audit_mod.reset_engine()
+
+
 EXPECTED_TOOLS = {
     # server
     "overview", "server_version", "show_settings", "list_extensions",
@@ -208,14 +224,24 @@ def test_create_index_undo_drops_created_name(monkeypatch):
 
 
 @pytest.mark.unit
-def test_dry_run_gates_destructive_cli():
-    """remediate drop-index --dry-run must not touch the connection."""
+def test_dry_run_gates_destructive_cli(monkeypatch, smoke_gov_home):
+    """remediate drop-index --dry-run previews without dropping anything.
+
+    The preview goes through the governed twin, so it MAY read the connection
+    (that is how its guards run against the real target); what it must never do
+    is issue the DROP.
+    """
+    from mcp_server.tools import remediation as rem
     from postgres_aiops.cli import app
+
+    conn = FakePg()
+    monkeypatch.setattr(rem, "_get_connection", lambda target=None: conn)
 
     runner = CliRunner()
     result = runner.invoke(app, ["remediate", "drop-index", "idx_x", "--dry-run"])
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
     assert "DRY-RUN" in result.output
+    assert conn.executed == [], "a dry-run must never execute a statement"
 
 
 @pytest.mark.unit
@@ -227,3 +253,33 @@ def test_dry_run_mcp_write_does_not_execute(monkeypatch):
     out = rem.run_vacuum(table="public.orders", dry_run=True)
     assert out.get("dryRun") is True
     assert conn.executed == []
+
+
+@pytest.mark.unit
+def test_risk_level_agrees_with_read_write_docstring_tag():
+    """The two write-markers must never drift apart.
+
+    A tool's ``risk_level`` decides its audit tier and whether it gets dry-run /
+    undo handling; its ``[READ]``/``[WRITE]`` docstring tag is what the docs and
+    capability tables are built from. If a ``[WRITE]`` were left ``risk_level=low``
+    it would be audited as a read and skip the write machinery — this test caught
+    16 such mislabels line-wide once, so it is kept even though read-only mode
+    (its original motivation) is gone.
+    """
+    from mcp_server import server
+
+    untagged, mismatched = [], []
+    for name, tool in server.mcp._tool_manager._tools.items():
+        doc = (tool.fn.__doc__ or "").lstrip()
+        if doc.startswith("[READ]"):
+            tagged_as_read = True
+        elif doc.startswith("[WRITE]"):
+            tagged_as_read = False
+        else:
+            untagged.append(name)
+            continue
+        if tagged_as_read != (getattr(tool.fn, "_risk_level", "low") == "low"):
+            mismatched.append(name)
+
+    assert not untagged, f"tools missing a [READ]/[WRITE] docstring tag: {untagged}"
+    assert not mismatched, f"risk_level disagrees with the docstring tag: {mismatched}"

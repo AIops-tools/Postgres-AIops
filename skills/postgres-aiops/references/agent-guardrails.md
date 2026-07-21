@@ -13,12 +13,17 @@ harness is a guarantee. Anything below that we could move into the harness, we d
 
 | You might be tempted to prompt | Why you don't need to |
 |---|---|
-| "Work read-only, never modify anything" | Set `POSTGRES_READ_ONLY=1`. Write tools are then **not registered at all** — they never appear in the tool list, so the model cannot call one even if it tries. The `@governed_tool` harness independently refuses writes, so the CLI is covered too. |
 | "Don't invent a value when a field is missing" | A column the server returned as SQL `NULL` comes back as `null`, never as `""`. `lastAutovacuum: null` means the table was *never* autovacuumed; `unit: null` means the setting is not a numeric quantity; `plugin: null` means the replication slot is physical, not logical. Absent and empty are distinguishable in the payload. |
 | "Tell me if the output was cut off" | Anything with a `limit` returns `{"statements": [...], "returned": N, "limit": L, "truncated": true/false}`. Truncation is **measured** — one extra row is fetched — not guessed from the row count happening to equal the limit. An analysis that pulled a truncated read also carries `sourceTruncated`. |
 | "Preserve the ordering / tell me what's most urgent" | Ranked reads are already ordered worst-first (`table_bloat` by dead tuples, `index_bloat` by estimated bloat, `blocking_lock_chain_rca` by how many backends a root blocker holds up), and every finding cites the number that triggered it. |
-| "Confirm before anything destructive" | Destructive operations require a `--dry-run`-able preview + double confirmation at the CLI, and a named approver (`POSTGRES_AUDIT_APPROVED_BY`) for high-risk tiers such as `terminate_backend` and `drop_index`. |
+| "Confirm before anything destructive" | Destructive operations require a `--dry-run`-able preview + double confirmation at the CLI for high-risk tiers such as `terminate_backend` and `drop_index`. |
 | "Log what you did" | Every call is audited to `~/.postgres-aiops/audit.db` regardless of what the model says it did. Reversible writes (`create_index`, `drop_index`, `update_setting`) also record an undo token capturing the pre-change state. |
+
+**Authorization is not this tool's job.** Whether a write is permitted is decided by the account
+you connect it with (connect with a PostgreSQL role that has no write privileges — a read-only
+role, or one without INSERT/UPDATE/DELETE/DDL — and the write fails at the server) or by your
+agent's prompt. `POSTGRES_AUDIT_APPROVED_BY` / `POSTGRES_AUDIT_RATIONALE` are optional annotations
+recorded on the audit row; they are never required and never block a call.
 
 ## What still needs a prompt
 
@@ -65,17 +70,20 @@ SCOPE
 
 ## Recommended setup for a local model
 
+Until you trust the setup, connect the tool with a read-only PostgreSQL role
+(no INSERT/UPDATE/DELETE/DDL) — that is real enforcement at the server, not a
+prompt asking the model to behave:
+
 ```bash
-# Read-only until you trust the setup — this is enforced, not advisory.
-export POSTGRES_READ_ONLY=1
+postgres-aiops init       # point it at a read-only role
 postgres-aiops doctor
 ```
 
-Then, when you are ready to allow writes, unset it and set an approver so the
-high-risk tier has an accountable name on it:
+Then, when you are ready to allow writes, point `init` (or `secret set`) at a
+role with write privileges, and optionally set an approver so the audit trail
+carries an accountable name:
 
 ```bash
-unset POSTGRES_READ_ONLY
 export POSTGRES_AUDIT_APPROVED_BY="your.name@example.com"
 export POSTGRES_AUDIT_RATIONALE="scheduled maintenance window 2026-07-20"
 ```

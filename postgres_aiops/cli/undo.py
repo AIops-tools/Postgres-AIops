@@ -18,7 +18,7 @@ from postgres_aiops.cli._common import (
     cli_errors,
     console,
     double_confirm,
-    dry_run_print,
+    dry_run_preview,
 )
 
 undo_app = typer.Typer(
@@ -51,11 +51,17 @@ def undo_apply_cmd(
     from mcp_server.tools import undo as gov
 
     if dry_run:
+        # undo_apply refuses an unknown or already-applied token, and refuses one
+        # whose inverse tool is not registered. Those arrive as {"error": ...}, so
+        # the banner fields below are read defensively and never printed:
+        # dry_run_preview exits non-zero on a refusal before rendering.
         preview = gov.undo_apply(undo_id=undo_id, dry_run=True, target=target)
-        dry_run_print(
+        would = (preview.get("wouldApply") or {}) if isinstance(preview, dict) else {}
+        dry_run_preview(
+            preview,
             operation="undo_apply",
-            api_call=f"inverse: {preview.get('wouldApply', {}).get('tool', '?')}",
-            parameters=preview.get("wouldApply", {}).get("params", {}),
+            api_call=f"inverse: {would.get('tool', '?')}",
+            parameters=would.get("params", {}),
         )
         return
     double_confirm("apply undo", undo_id)

@@ -46,9 +46,12 @@ Every MCP tool runs through the bundled `@governed_tool` harness
 - **Token/runaway budget** — hard ceilings (`POSTGRES_MAX_TOOL_CALLS` /
   `POSTGRES_MAX_TOOL_SECONDS` — the env-var names the bundled harness reads) plus
   an on-by-default guard that trips a tight poll/retry loop.
-- **Graduated risk tiers** — `~/.postgres-aiops/rules.yaml` `risk_tiers` gate
-  writes by environment/tag; the highest tiers require a recorded approver
-  (`POSTGRES_AUDIT_APPROVED_BY` / `POSTGRES_AUDIT_RATIONALE`).
+- **Risk tiers** — a descriptive label (`none`/`confirm`/`review`) carried into
+  the audit row from each tool's declared `risk_level`; it gates nothing. The
+  harness does not decide whether a write is permitted — that is the agent's
+  judgement or the connecting account's permissions. `POSTGRES_AUDIT_APPROVED_BY`
+  / `POSTGRES_AUDIT_RATIONALE` are optional annotations recorded on the audit
+  row, never required, never blocking.
 - **Undo-token recording** — reversible writes fetch the **real before-state
   first** and record a faithful inverse (`create_index`↔`drop_index`, where drop
   captures `pg_get_indexdef`; `update_setting` restores the prior value).

@@ -80,8 +80,9 @@ export POSTGRES_AIOPS_MASTER_PASSWORD='your-master-password'
 
 State lives under `~/.postgres-aiops/` (relocate with `POSTGRES_AIOPS_HOME`):
 
-- `audit.db` — every tool call (SQLite), with risk tier, approver, rationale
-- `rules.yaml` — policy: deny rules, maintenance windows, approval tiers
+- `audit.db` — every tool call (SQLite), with risk tier and an optional
+  approver/rationale annotation (`POSTGRES_AUDIT_APPROVED_BY` /
+  `POSTGRES_AUDIT_RATIONALE` — never required, never blocking)
 - `undo.db` — inverse descriptors for reversible writes (e.g. `drop_index`)
 - budget / runaway guard — caps cumulative tool calls and wall-time; trips on
   tight poll/retry loops

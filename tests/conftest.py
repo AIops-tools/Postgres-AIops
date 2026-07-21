@@ -15,10 +15,12 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _default_approver(monkeypatch):
-    """The policy layer is secure-by-default: with no rules.yaml, high/critical
-    governed calls require a named approver. Tests exercising tool behavior
-    are not about that gate, so record a synthetic approver globally; the
-    governance-persistence tests remove it to test the gate itself."""
+    """Record a synthetic approver annotation globally.
+
+    The harness authorizes nothing, so this gates nothing; it only ensures the
+    optional ``approved_by`` audit field is populated for tests that do not set
+    their own. The governance-persistence tests clear it to show the annotation
+    is genuinely optional."""
     monkeypatch.setenv("POSTGRES_AUDIT_APPROVED_BY", "pytest")
 
 

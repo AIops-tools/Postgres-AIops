@@ -28,9 +28,10 @@ suite predicts. Sections left open below are **not** claimed.
   (with `drop_index` capturing `pg_get_indexdef` **before** dropping), and
   `update_setting` capturing the prior value. Irreversible ops (terminate,
   cancel, vacuum, analyze, reindex, reset stats) declare no undo.
-- Governance persistence: audited rows land in the SQLite audit DB, and the
-  secure-by-default approver gate refuses high-risk writes with no `rules.yaml`
-  and no `POSTGRES_AUDIT_APPROVED_BY`.
+- Governance persistence: audited rows land in the SQLite audit DB. The harness
+  authorizes nothing — there is no read-only, deny-rule, or approver gate to
+  test; an approver, when supplied, is recorded on the audit row as an optional
+  annotation.
 
 ## Prerequisites for a live run
 
@@ -113,10 +114,12 @@ are open — record them as gaps rather than silently passing.
       long-running backend (**open gap** — not exercised live).
 - [ ] `remediate reindex` on a real index (**open gap**).
 
-### 6. Governance actually gates
-- [x] ✅ With no `~/.postgres-aiops/rules.yaml`, a high-risk write was refused
-      until `POSTGRES_AUDIT_APPROVED_BY` named an approver (secure-by-default);
-      the approver and `POSTGRES_AUDIT_RATIONALE` appear in the audit row.
+### 6. Governance records, it does not gate
+- [x] ✅ The harness authorizes nothing — there is no read-only, deny-rule, or
+      approver gate to test. A high-risk write ran with no approver set and
+      landed an `ok` audit row; when `POSTGRES_AUDIT_APPROVED_BY` and
+      `POSTGRES_AUDIT_RATIONALE` were set, they appeared in the audit row as
+      optional annotations.
 - [x] ✅ Relocation: with `POSTGRES_AIOPS_HOME` set, `audit.db`, the undo store,
       and `secrets.enc` all land under that directory.
 - [ ] A tight poll loop trips the runaway budget guard rather than hammering the

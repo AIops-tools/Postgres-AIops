@@ -120,6 +120,39 @@ def test_explain_wraps_statement():
 
 
 @pytest.mark.unit
+def test_explain_analyze_refuses_a_data_modifying_statement():
+    """ANALYZE executes the statement, so it must not run a DELETE/UPDATE/etc.
+    off the audited path — explain_query is [READ] and must stay that way."""
+    conn = FakePg()
+    for stmt in ("DELETE FROM t", "UPDATE t SET x=1", "INSERT INTO t VALUES (1)",
+                 "WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d", "TRUNCATE t"):
+        with pytest.raises(ValueError, match="could modify data"):
+            queries.explain_query(conn, stmt, analyze=True)
+    assert conn.queried == [], "no statement should have reached the server"
+
+
+@pytest.mark.unit
+def test_explain_analyze_allows_a_read_only_statement():
+    conn = FakePg({"EXPLAIN": [{"QUERY PLAN": [{"Plan": {}}]}]})
+    out = queries.explain_query(conn, "SELECT * FROM t", analyze=True)
+    assert out["analyze"] is True
+    assert conn.queried[0][0].startswith("EXPLAIN (ANALYZE,")
+
+
+@pytest.mark.unit
+def test_explain_analyze_runs_inside_a_rolled_back_transaction():
+    """ANALYZE executes, so it must be wrapped BEGIN … ROLLBACK — a SELECT INTO
+    or a FOR UPDATE then leaves nothing behind. A plain EXPLAIN does not wrap."""
+    conn = FakePg({"EXPLAIN": [{"QUERY PLAN": [{"Plan": {}}]}]})
+    queries.explain_query(conn, "SELECT * FROM t FOR UPDATE", analyze=True)
+    assert [c[0] for c in conn.executed] == ["BEGIN", "ROLLBACK"]
+
+    plain = FakePg({"EXPLAIN": [{"QUERY PLAN": [{"Plan": {}}]}]})
+    queries.explain_query(plain, "SELECT * FROM t", analyze=False)
+    assert plain.executed == [], "a non-analyze EXPLAIN must not open a transaction"
+
+
+@pytest.mark.unit
 def test_unused_indexes_totals_reclaimable():
     conn = FakePg({"FROM pg_stat_user_indexes": [
         {"schema": "public", "table": "t", "index": "idx_a", "idx_scan": 0,

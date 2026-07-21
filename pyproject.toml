@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "postgres-aiops"
-version = "0.5.0"
+version = "0.6.0"
 description = "Governed AI-ops for PostgreSQL DBA operations: slow-query RCA, bloat/vacuum & blocking-lock analysis with a built-in governance harness (audit, budget, undo, risk tiers)"
 readme = "README.md"
 license = "MIT"

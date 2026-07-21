@@ -89,8 +89,11 @@ is cut short the JSON on stdout stays clean and a notice is written to stderr:
 `analyze slow-query` / `analyze bloat-vacuum` pull a limited read themselves, so
 they also report `sourceTruncated` / `sourceLimit` when their input was partial.
 
-## Read-only mode
+## What decides whether a write runs
 
-`export POSTGRES_READ_ONLY=1` unregisters all 10 write tools from the MCP server
-and makes the governance harness refuse any non-read call, including from the
-CLI. See [agent-guardrails.md](agent-guardrails.md).
+The tool does not decide whether a write is permitted — that is the agent's
+judgement, or the permission of the PostgreSQL role you connect it with:
+connect with a role that has no write privileges (a read-only role, or one
+without INSERT/UPDATE/DELETE/DDL) and the write fails at the server. Every
+call, over MCP and over the CLI alike, is still audited. See
+[agent-guardrails.md](agent-guardrails.md).

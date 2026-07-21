@@ -51,7 +51,7 @@ The flagship analyses accept injected records (`statements=` / `tables=` /
 | `reindex` | medium | `REINDEX INDEX/TABLE/SCHEMA` | rebuild in place; no undo |
 | `update_setting` | medium | `ALTER SYSTEM SET` | captures prior value; undo = set back; reports pg_reload_conf needed |
 | `reset_query_stats` | medium | `pg_stat_statements_reset()` | irreversible; no undo |
-| `undo_apply` | medium | dispatches the recorded inverse tool | executes a recorded inverse; the inverse runs through its own governed tool (its real risk tier + approver gate apply); single-use token; supports `dry_run` |
+| `undo_apply` | medium | dispatches the recorded inverse tool | executes a recorded inverse; the inverse runs through its own governed tool (its real risk tier + audit row are recorded there); single-use token; supports `dry_run` |
 
 All values are bound query parameters; identifiers that cannot be parameterised
 (table/index/GUC names, ORDER BY columns, index methods, REINDEX kinds) are

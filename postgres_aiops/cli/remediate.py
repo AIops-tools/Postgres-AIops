@@ -14,7 +14,6 @@ from postgres_aiops.cli._common import (
     console,
     double_confirm,
     dry_run_preview,
-    dry_run_print,
 )
 
 remediate_app = typer.Typer(
@@ -76,13 +75,15 @@ def remediate_vacuum(
     dry_run: DryRunOption = False,
 ) -> None:
     """VACUUM a table (dry-run + confirm)."""
-    if dry_run:
-        dry_run_print(operation="run_vacuum", api_call=f"VACUUM {table}",
-                      parameters={"full": full, "analyze": analyze})
-        return
-    double_confirm("VACUUM", table)
     from mcp_server.tools import remediation as gov
 
+    if dry_run:
+        dry_run_preview(
+            gov.run_vacuum(table=table, full=full, analyze=analyze, dry_run=True, target=target),
+            operation="run_vacuum", api_call=f"VACUUM {table}",
+            parameters={"full": full, "analyze": analyze})
+        return
+    double_confirm("VACUUM", table)
     console.print_json(
         json.dumps(gov.run_vacuum(table=table, full=full, analyze=analyze, target=target)))
 
@@ -95,12 +96,14 @@ def remediate_analyze(
     dry_run: DryRunOption = False,
 ) -> None:
     """ANALYZE a table (dry-run + confirm)."""
-    if dry_run:
-        dry_run_print(operation="run_analyze", api_call=f"ANALYZE {table}")
-        return
-    double_confirm("ANALYZE", table)
     from mcp_server.tools import remediation as gov
 
+    if dry_run:
+        dry_run_preview(
+            gov.run_analyze(table=table, dry_run=True, target=target),
+            operation="run_analyze", api_call=f"ANALYZE {table}")
+        return
+    double_confirm("ANALYZE", table)
     console.print_json(json.dumps(gov.run_analyze(table=table, target=target)))
 
 
@@ -116,13 +119,18 @@ def remediate_create_index(
     dry_run: DryRunOption = False,
 ) -> None:
     """Create an index (reversible; dry-run + confirm)."""
-    if dry_run:
-        dry_run_print(operation="create_index", api_call=f"CREATE INDEX ON {table}",
-                      parameters={"columns": columns, "name": name, "unique": unique})
-        return
-    double_confirm("create index on", table)
     from mcp_server.tools import remediation as gov
 
+    if dry_run:
+        # Through the governed call: create_index validates the table/columns vs
+        # definition argument shape, so a preview must report an invalid one.
+        dry_run_preview(
+            gov.create_index(table=table, columns=columns, name=name, unique=unique,
+                             concurrently=concurrently, dry_run=True, target=target),
+            operation="create_index", api_call=f"CREATE INDEX ON {table}",
+            parameters={"columns": columns, "name": name, "unique": unique})
+        return
+    double_confirm("create index on", table)
     result = gov.create_index(table=table, columns=columns, name=name, unique=unique,
                               concurrently=concurrently, target=target)
     console.print_json(json.dumps(result))
@@ -137,12 +145,14 @@ def remediate_drop_index(
     dry_run: DryRunOption = False,
 ) -> None:
     """Drop an index (reversible; captures the definition first; dry-run + confirm)."""
-    if dry_run:
-        dry_run_print(operation="drop_index", api_call=f"DROP INDEX {name}")
-        return
-    double_confirm("drop index", name)
     from mcp_server.tools import remediation as gov
 
+    if dry_run:
+        dry_run_preview(
+            gov.drop_index(name=name, concurrently=concurrently, dry_run=True, target=target),
+            operation="drop_index", api_call=f"DROP INDEX {name}")
+        return
+    double_confirm("drop index", name)
     console.print_json(
         json.dumps(gov.drop_index(name=name, concurrently=concurrently, target=target)))
 
@@ -157,12 +167,15 @@ def remediate_reindex(
     dry_run: DryRunOption = False,
 ) -> None:
     """REINDEX an index/table/schema (dry-run + confirm)."""
-    if dry_run:
-        dry_run_print(operation="reindex", api_call=f"REINDEX {kind} {target_name}")
-        return
-    double_confirm(f"REINDEX {kind}", target_name)
     from mcp_server.tools import remediation as gov
 
+    if dry_run:
+        dry_run_preview(
+            gov.reindex(target_name=target_name, kind=kind, concurrently=concurrently,
+                        dry_run=True, target=target),
+            operation="reindex", api_call=f"REINDEX {kind} {target_name}")
+        return
+    double_confirm(f"REINDEX {kind}", target_name)
     console.print_json(json.dumps(gov.reindex(target_name=target_name, kind=kind,
                                               concurrently=concurrently, target=target)))
 

@@ -27,10 +27,18 @@ DryRunOption = Annotated[
 
 
 def _cli_error_types() -> tuple[type[BaseException], ...]:
-    """Exceptions translated to a one-line teaching error instead of a traceback."""
-    from postgres_aiops.connection import PgError
+    """Exceptions translated to a one-line teaching error instead of a traceback.
 
-    return (PgError, KeyError, OSError, ValueError)
+    ``PolicyDenied``/``BudgetExceeded`` are raised by ``@governed_tool`` OUTSIDE
+    the tool body, so ``tool_errors`` never sees them and they never arrive as
+    an ``{"error": ...}`` dict. Their message is the teaching text (which
+    approver to set, which budget was hit) — without them here a refusal
+    reaches the CLI as a traceback instead.
+    """
+    from postgres_aiops.connection import PgError
+    from postgres_aiops.governance import BudgetExceeded, PolicyDenied
+
+    return (PgError, PolicyDenied, BudgetExceeded, KeyError, OSError, ValueError)
 
 
 def cli_errors(fn: Callable) -> Callable:
