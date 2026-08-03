@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- **`undo apply` replays against the target the original write ran on.** It dispatched the inverse against whatever target the *caller* named — in practice the config's first entry — while the write's own target sat unused in the undo record. On a multi-target config the inverse therefore ran against the wrong host; it only looks harmless because the resource usually is not there, but two hosts holding the same name and the inverse **succeeds on the wrong one, silently**. An explicitly named target still wins. Line-wide: all 24 copies had the identical defect. Caught live in container-host-aiops, where a stop recorded against a Podman target replayed against a Portainer one.
 - **Undoing an `ALTER SYSTEM SET` no longer leaves the parameter pinned.** The inverse wrote the prior *value* back with another `ALTER SYSTEM SET`, so a parameter that had **no** `postgresql.auto.conf` entry beforehand ended up with one. The number was right, but `postgresql.auto.conf` overrides `postgresql.conf`, so the "undo" silently shadowed the operator's config file from then on — a later edit there would have no effect. `update_setting` now records where the value came from (`pg_settings.sourcefile`), and the inverse is `ALTER SYSTEM RESET` unless the parameter was already carried by auto.conf. Live-verified on PostgreSQL 16.14 in both directions, checking `postgresql.auto.conf` itself after each undo.
 
 ### Added
