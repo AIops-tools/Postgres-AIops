@@ -338,12 +338,32 @@ def guard_update_setting(name: str) -> None:
     )
 
 
-def update_setting(conn: Any, name: str, value: str) -> dict:
-    """[WRITE] ALTER SYSTEM SET a parameter. Reversible: captures the prior value.
+def _pinned_in_auto_conf(prior: dict) -> bool:
+    """Was this parameter already carried by ``postgresql.auto.conf``?
+
+    ``pg_settings.source`` reads ``configuration file`` for both postgresql.conf
+    and postgresql.auto.conf, so only ``sourcefile`` separates them. A parameter
+    that has never been ALTER SYSTEM'd reads ``source = default`` with a NULL
+    sourcefile, or points at postgresql.conf. Verified on PostgreSQL 16.14.
+    """
+    sourcefile = prior.get("sourcefile") or ""
+    return str(sourcefile).endswith("postgresql.auto.conf")
+
+
+def update_setting(
+    conn: Any, name: str, value: str | None = None, reset: bool = False
+) -> dict:
+    """[WRITE] ALTER SYSTEM SET (or RESET) a parameter. Captures the prior state.
 
     Writes to postgresql.auto.conf; most parameters need ``SELECT pg_reload_conf()``
     (or a restart for ``pending_restart`` ones) to take effect — this is reported
     but NOT performed automatically.
+
+    ``reset=True`` issues ``ALTER SYSTEM RESET``, removing the parameter's
+    postgresql.auto.conf entry so whatever set it before (postgresql.conf, or the
+    built-in default) applies again. That is the correct inverse for a parameter
+    that had **no** auto.conf entry: writing the prior *value* back would restore
+    the number while leaving a pin that silently shadows postgresql.conf forever.
 
     **Refuses the connection-affecting postmaster settings**
     (``listen_addresses``, ``port``, ``max_connections``,
@@ -353,22 +373,35 @@ def update_setting(conn: Any, name: str, value: str) -> dict:
     """
     guard_update_setting(name)
     setting_name = _validate_setting_name(name)
+    if not reset and value is None:
+        raise ValueError(
+            f"No value given for {setting_name!r}. Pass a value, or reset=True "
+            f"to drop its postgresql.auto.conf entry."
+        )
     prior = conn.query_one(
-        "SELECT setting, unit, context, pending_restart FROM pg_settings WHERE name = %(n)s",
+        "SELECT setting, unit, context, pending_restart, source, sourcefile "
+        "FROM pg_settings WHERE name = %(n)s",
         {"n": setting_name},
     ) or {}
-    literal = quote_literal(str(value))
-    sql = f"ALTER SYSTEM SET {setting_name} = {literal}"  # nosec B608 — name validated, value literal-quoted
+    if reset:
+        sql = f"ALTER SYSTEM RESET {setting_name}"  # nosec B608 — name validated
+    else:
+        literal = quote_literal(str(value))
+        sql = f"ALTER SYSTEM SET {setting_name} = {literal}"  # nosec B608 — name validated, value literal-quoted
     conn.execute(sql)
     needs_restart = bool(prior.get("pending_restart")) or prior.get("context") == "postmaster"
     return {
         "action": "update_setting",
         "setting": setting_name,
-        "newValue": str(value),
+        "newValue": None if reset else str(value),
+        "reset": reset,
         "priorState": {
             "value": s(prior.get("setting"), 256),
             "unit": opt(prior.get("unit"), 32),
             "context": s(prior.get("context"), 32),
+            # Where the value came from decides what "put it back" means.
+            "source": opt(prior.get("source"), 32),
+            "pinnedInAutoConf": _pinned_in_auto_conf(prior),
         },
         "reloadRequired": True,
         "restartRequired": needs_restart,

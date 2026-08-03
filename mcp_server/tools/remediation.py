@@ -50,12 +50,27 @@ def _drop_index_undo(params: dict[str, Any], result: Any) -> Optional[dict]:
 def _update_setting_undo(params: dict[str, Any], result: Any) -> Optional[dict]:
     if not isinstance(result, dict):
         return None
-    prior = (result.get("priorState") or {}).get("value")
-    if prior is None or prior == "":
+    prior = result.get("priorState") or {}
+    if not prior.get("pinnedInAutoConf"):
+        # The parameter had no postgresql.auto.conf entry, so putting the prior
+        # VALUE back would restore the number while leaving behind a pin that
+        # shadows postgresql.conf (auto.conf wins) for good. RESET removes the
+        # entry and lets the previous source apply again.
+        return {
+            "tool": "update_setting",
+            "params": {"name": params.get("name"), "reset": True},
+            "skill": "postgres-aiops",
+            "note": (
+                "Inverse of update_setting: ALTER SYSTEM RESET, because the "
+                "parameter had no postgresql.auto.conf entry beforehand."
+            ),
+        }
+    value = prior.get("value")
+    if value is None or value == "":
         return None
     return {
         "tool": "update_setting",
-        "params": {"name": params.get("name"), "value": prior},
+        "params": {"name": params.get("name"), "value": value},
         "skill": "postgres-aiops",
         "note": "Inverse of update_setting: ALTER SYSTEM SET back to the prior value.",
     }
@@ -282,16 +297,22 @@ def reindex(
 @tool_errors("dict")
 def update_setting(
     name: str,
-    value: str,
+    value: Optional[str] = None,
+    reset: bool = False,
     dry_run: bool = False,
     target: Optional[str] = None,
 ) -> dict:
-    """[WRITE][risk=medium] ALTER SYSTEM SET a parameter. Reversible: captures prior value.
+    """[WRITE][risk=medium] ALTER SYSTEM SET (or RESET) a parameter. Reversible.
 
     Writes postgresql.auto.conf; most parameters need SELECT pg_reload_conf() (or
     a restart for postmaster-context settings) to take effect — reported but NOT
-    performed automatically. The prior value is captured so the harness records an
-    undo that sets it back. Pass dry_run=True to preview.
+    performed automatically. The prior state is captured so the harness records
+    an undo. Pass dry_run=True to preview.
+
+    reset=True issues ALTER SYSTEM RESET, dropping the parameter's auto.conf
+    entry so postgresql.conf or the built-in default applies again. That is the
+    recorded inverse when the parameter had no auto.conf entry to begin with:
+    writing the prior value back would leave a pin that shadows postgresql.conf.
 
     Refuses the connection-affecting postmaster settings (listen_addresses,
     port, max_connections, superuser_reserved_connections, ssl, hba_file):
@@ -300,7 +321,8 @@ def update_setting(
 
     Args:
         name: The configuration parameter name (e.g. work_mem).
-        value: The new value (as a string).
+        value: The new value (as a string). Omit when reset=True.
+        reset: If True, ALTER SYSTEM RESET the parameter instead of setting it.
         dry_run: If True, preview without changing.
         target: Target name from config; omit for the default.
     """
@@ -309,5 +331,7 @@ def update_setting(
     # call — a preview of a refused setting must report the refusal.
     ops.guard_update_setting(name)
     if dry_run:
+        if reset:
+            return {"dryRun": True, "wouldReset": {"name": name}}
         return {"dryRun": True, "wouldSet": {"name": name, "value": value}}
-    return ops.update_setting(conn, name, value)
+    return ops.update_setting(conn, name, value, reset=reset)

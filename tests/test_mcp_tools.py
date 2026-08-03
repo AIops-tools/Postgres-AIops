@@ -77,17 +77,48 @@ def test_drop_index_undo_none_without_definition():
 
 
 @pytest.mark.unit
-def test_update_setting_undo_sets_back_prior_value():
+def test_update_setting_undo_sets_back_prior_value_when_it_was_pinned():
+    """Only a parameter already carried by auto.conf is restored by value."""
     from mcp_server.tools.remediation import _update_setting_undo
 
-    desc = _update_setting_undo({"name": "work_mem"}, {"priorState": {"value": "4MB"}})
+    desc = _update_setting_undo(
+        {"name": "work_mem"},
+        {"priorState": {"value": "4MB", "source": "configuration file",
+                        "pinnedInAutoConf": True}},
+    )
     assert desc["tool"] == "update_setting"
     assert desc["params"] == {"name": "work_mem", "value": "4MB"}
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("result", [{"priorState": {"value": ""}}, {"priorState": {}}, "x"])
-def test_update_setting_undo_none_when_no_prior(result):
+def test_update_setting_undo_resets_when_there_was_no_auto_conf_entry():
+    """Restoring the VALUE would leave a pin that shadows postgresql.conf.
+
+    Shape from a live PostgreSQL 16.14: an untouched parameter reads
+    ``source = default`` with a NULL sourcefile, so the inverse of setting it
+    must be ALTER SYSTEM RESET, not ALTER SYSTEM SET back to the old number.
+    """
+    from mcp_server.tools.remediation import _update_setting_undo
+
+    desc = _update_setting_undo(
+        {"name": "work_mem"},
+        {"priorState": {"value": "4096", "unit": "kB", "context": "user",
+                        "source": "default", "pinnedInAutoConf": False}},
+    )
+    assert desc["params"] == {"name": "work_mem", "reset": True}
+    assert "RESET" in desc["note"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "result",
+    [
+        {"priorState": {"value": "", "pinnedInAutoConf": True}},
+        {"priorState": {"pinnedInAutoConf": True}},
+        "x",
+    ],
+)
+def test_update_setting_undo_none_when_pinned_but_no_prior_value(result):
     from mcp_server.tools.remediation import _update_setting_undo
 
     assert _update_setting_undo({"name": "work_mem"}, result) is None

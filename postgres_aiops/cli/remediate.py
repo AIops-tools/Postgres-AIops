@@ -184,20 +184,29 @@ def remediate_reindex(
 @cli_errors
 def remediate_set(
     name: Annotated[str, typer.Argument(help="Parameter name (e.g. work_mem)")],
-    value: Annotated[str, typer.Argument(help="New value")],
+    value: Annotated[str | None, typer.Argument(help="New value")] = None,
+    reset: Annotated[bool, typer.Option(
+        "--reset",
+        help="ALTER SYSTEM RESET instead: drop the parameter's "
+             "postgresql.auto.conf entry so postgresql.conf / the default applies",
+    )] = False,
     target: TargetOption = None,
     dry_run: DryRunOption = False,
 ) -> None:
-    """ALTER SYSTEM SET a parameter (reversible; dry-run + confirm)."""
+    """ALTER SYSTEM SET a parameter, or --reset it (reversible; dry-run + confirm)."""
     from mcp_server.tools import remediation as gov
 
+    action = f"ALTER SYSTEM RESET {name}" if reset else f"ALTER SYSTEM SET {name} ="
     if dry_run:
         # Through the governed call: update_setting refuses the
         # connection-affecting postmaster settings, so a preview must report it.
         dry_run_preview(
-            gov.update_setting(name=name, value=value, dry_run=True, target=target),
+            gov.update_setting(
+                name=name, value=value, reset=reset, dry_run=True, target=target),
             operation="update_setting",
-            api_call=f"ALTER SYSTEM SET {name} = ...", parameters={"value": value})
+            api_call=f"{action} ...",
+            parameters={"value": value, "reset": reset})
         return
-    double_confirm(f"ALTER SYSTEM SET {name} =", value)
-    console.print_json(json.dumps(gov.update_setting(name=name, value=value, target=target)))
+    double_confirm(action, "(default)" if reset else str(value))
+    console.print_json(json.dumps(
+        gov.update_setting(name=name, value=value, reset=reset, target=target)))

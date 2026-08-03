@@ -103,8 +103,22 @@ are open — record them as gaps rather than silently passing.
 - [x] ✅ `postgres-aiops undo apply <id>` → replayed correctly and recreated the
       index from the captured definition. (A replay bug found in an earlier
       round was fixed and is now covered by a regression test.)
-- [ ] `remediate set <guc> <value>` then `undo apply` → the prior value restored
-      (**open gap** — `update_setting` was not exercised live).
+- [x] ✅ `remediate set <guc> <value>` then `undo apply` — **closed 2026-08-03,
+      and it found a bug.** Both directions were run against PostgreSQL 16.14
+      with `postgresql.auto.conf` inspected after each step:
+      - a parameter with **no** prior auto.conf entry (`source = default`) →
+        undo now issues `ALTER SYSTEM RESET` and the file is left clean. It
+        used to write the prior *value* back as a new entry: the number was
+        right, but auto.conf **overrides** postgresql.conf, so the "undo"
+        silently pinned a parameter that had been inherited, and any later edit
+        to postgresql.conf would have had no effect.
+      - a parameter that **was** already pinned (`ALTER SYSTEM SET work_mem =
+        '2MB'` first) → undo restores the value and keeps the entry.
+      The discriminator is `pg_settings.sourcefile`: `source` reads
+      `configuration file` for postgresql.conf *and* auto.conf alike, so only
+      the filename separates them. Note the pin is **latent** — until someone
+      runs `pg_reload_conf()`, `source` still reads `default`, so the damage is
+      invisible at the moment it is done.
 
 ### 5. Irreversible writes are honest about it
 - [x] ✅ `remediate vacuum <table> --analyze` → the dead tuples were actually
