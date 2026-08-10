@@ -10,6 +10,7 @@ import typer
 from postgres_aiops.cli._common import (
     DryRunOption,
     TargetOption,
+    checked,
     cli_errors,
     console,
     double_confirm,
@@ -42,7 +43,7 @@ def remediate_terminate(
             api_call="SELECT pg_terminate_backend(pid)", parameters={"pid": pid})
         return
     double_confirm("terminate backend", str(pid))
-    console.print_json(json.dumps(gov.terminate_backend(pid=pid, target=target)))
+    console.print_json(json.dumps(checked(gov.terminate_backend(pid=pid, target=target))))
 
 
 @remediate_app.command("cancel")
@@ -62,7 +63,7 @@ def remediate_cancel(
             api_call="SELECT pg_cancel_backend(pid)", parameters={"pid": pid})
         return
     double_confirm("cancel query on backend", str(pid))
-    console.print_json(json.dumps(gov.cancel_query(pid=pid, target=target)))
+    console.print_json(json.dumps(checked(gov.cancel_query(pid=pid, target=target))))
 
 
 @remediate_app.command("vacuum")
@@ -85,7 +86,7 @@ def remediate_vacuum(
         return
     double_confirm("VACUUM", table)
     console.print_json(
-        json.dumps(gov.run_vacuum(table=table, full=full, analyze=analyze, target=target)))
+        json.dumps(checked(gov.run_vacuum(table=table, full=full, analyze=analyze, target=target))))
 
 
 @remediate_app.command("analyze-table")
@@ -104,7 +105,7 @@ def remediate_analyze(
             operation="run_analyze", api_call=f"ANALYZE {table}")
         return
     double_confirm("ANALYZE", table)
-    console.print_json(json.dumps(gov.run_analyze(table=table, target=target)))
+    console.print_json(json.dumps(checked(gov.run_analyze(table=table, target=target))))
 
 
 @remediate_app.command("create-index")
@@ -131,8 +132,8 @@ def remediate_create_index(
             parameters={"columns": columns, "name": name, "unique": unique})
         return
     double_confirm("create index on", table)
-    result = gov.create_index(table=table, columns=columns, name=name, unique=unique,
-                              concurrently=concurrently, target=target)
+    result = checked(gov.create_index(table=table, columns=columns, name=name, unique=unique,
+                              concurrently=concurrently, target=target))
     console.print_json(json.dumps(result))
 
 
@@ -154,7 +155,7 @@ def remediate_drop_index(
         return
     double_confirm("drop index", name)
     console.print_json(
-        json.dumps(gov.drop_index(name=name, concurrently=concurrently, target=target)))
+        json.dumps(checked(gov.drop_index(name=name, concurrently=concurrently, target=target))))
 
 
 @remediate_app.command("reindex")
@@ -176,8 +177,8 @@ def remediate_reindex(
             operation="reindex", api_call=f"REINDEX {kind} {target_name}")
         return
     double_confirm(f"REINDEX {kind}", target_name)
-    console.print_json(json.dumps(gov.reindex(target_name=target_name, kind=kind,
-                                              concurrently=concurrently, target=target)))
+    console.print_json(json.dumps(checked(gov.reindex(target_name=target_name, kind=kind,
+                                              concurrently=concurrently, target=target))))
 
 
 @remediate_app.command("set")
@@ -209,4 +210,4 @@ def remediate_set(
         return
     double_confirm(action, "(default)" if reset else str(value))
     console.print_json(json.dumps(
-        gov.update_setting(name=name, value=value, reset=reset, target=target)))
+        checked(gov.update_setting(name=name, value=value, reset=reset, target=target))))

@@ -10,6 +10,7 @@ import typer
 from postgres_aiops.cli._common import (
     DryRunOption,
     TargetOption,
+    checked,
     cli_errors,
     console,
     double_confirm,
@@ -74,4 +75,4 @@ def query_reset(target: TargetOption = None, dry_run: DryRunOption = False) -> N
             operation="reset_query_stats", api_call="SELECT pg_stat_statements_reset()")
         return
     double_confirm("reset pg_stat_statements on", "this target")
-    console.print_json(json.dumps(gov.reset_query_stats(target=target)))
+    console.print_json(json.dumps(checked(gov.reset_query_stats(target=target))))
