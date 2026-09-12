@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "postgres-aiops",
   "displayName": "Postgres AIops",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Governed PostgreSQL DBA ops: slow-query RCA, bloat/vacuum & blocking-lock analysis; 35 MCP tools.",
   "author": {
     "name": "Wei Zhou",

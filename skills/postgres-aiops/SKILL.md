@@ -66,7 +66,7 @@ postgres-aiops doctor
 Or as an OpenClaw plugin, which installs this skill and its MCP server together:
 
 ```bash
-openclaw plugins install clawhub:@aiops-tools/postgres-aiops
+openclaw plugins install clawhub:@zw008/postgres-aiops
 openclaw skills info postgres-aiops          # expect: Visible to model: yes
 ```
 
