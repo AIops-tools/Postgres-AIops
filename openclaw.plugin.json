@@ -1,0 +1,24 @@
+{
+  "id": "postgres-aiops",
+  "name": "Postgres AIops",
+  "description": "Governed PostgreSQL DBA ops: slow-query RCA, bloat/vacuum & blocking-lock analysis; 35 MCP tools.",
+  "skills": [
+    "./skills"
+  ],
+  "mcpServers": {
+    "postgres-aiops": {
+      "transport": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "postgres-aiops==0.10.0",
+        "postgres-aiops-mcp"
+      ]
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
