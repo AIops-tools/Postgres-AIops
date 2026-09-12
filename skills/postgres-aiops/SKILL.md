@@ -63,6 +63,13 @@ postgres-aiops init       # interactive wizard: connection + encrypted password
 postgres-aiops doctor
 ```
 
+Or as an OpenClaw plugin, which installs this skill and its MCP server together:
+
+```bash
+openclaw plugins install clawhub:@aiops-tools/postgres-aiops
+openclaw skills info postgres-aiops          # expect: Visible to model: yes
+```
+
 ## When to Use This Skill
 
 - Triage a cluster (`overview`): version/uptime, connections by state, idle-in-transaction, longest query, worst bloat, replica lag
