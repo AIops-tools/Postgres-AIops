@@ -1,6 +1,6 @@
 {
   "name": "@aiops-tools/postgres-aiops",
-  "version": "0.10.0",
+  "version": "0.10.2",
   "description": "Governed PostgreSQL DBA ops: slow-query RCA, bloat/vacuum & blocking-lock analysis; 35 MCP tools.",
   "private": true,
   "license": "MIT",
