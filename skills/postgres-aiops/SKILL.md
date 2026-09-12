@@ -70,6 +70,8 @@ openclaw plugins install clawhub:@aiops-tools/postgres-aiops
 openclaw skills info postgres-aiops          # expect: Visible to model: yes
 ```
 
+Needs `uvx` on `PATH`: the MCP server is fetched with uv, pinned to this release.
+
 ## When to Use This Skill
 
 - Triage a cluster (`overview`): version/uptime, connections by state, idle-in-transaction, longest query, worst bloat, replica lag
