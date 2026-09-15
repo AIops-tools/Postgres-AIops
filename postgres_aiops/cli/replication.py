@@ -6,7 +6,7 @@ import json
 
 import typer
 
-from postgres_aiops.cli._common import TargetOption, cli_errors, console, get_connection
+from postgres_aiops.cli._common import TargetOption, audited, cli_errors, console, get_connection
 
 repl_app = typer.Typer(
     name="repl",
@@ -17,6 +17,7 @@ repl_app = typer.Typer(
 
 @repl_app.command("status")
 @cli_errors
+@audited
 def repl_status(target: TargetOption = None) -> None:
     """Connected standbys and replay lag."""
     from postgres_aiops.ops import replication as ops
@@ -27,6 +28,7 @@ def repl_status(target: TargetOption = None) -> None:
 
 @repl_app.command("slots")
 @cli_errors
+@audited
 def repl_slots(target: TargetOption = None) -> None:
     """Replication slots (inactive slots flagged)."""
     from postgres_aiops.ops import replication as ops
@@ -37,6 +39,7 @@ def repl_slots(target: TargetOption = None) -> None:
 
 @repl_app.command("wal")
 @cli_errors
+@audited
 def repl_wal(target: TargetOption = None) -> None:
     """WAL position, level and archiver health."""
     from postgres_aiops.ops import replication as ops

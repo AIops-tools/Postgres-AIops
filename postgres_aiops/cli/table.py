@@ -8,6 +8,7 @@ import typer
 
 from postgres_aiops.cli._common import (
     TargetOption,
+    audited,
     cli_errors,
     get_connection,
     print_result,
@@ -22,6 +23,7 @@ table_app = typer.Typer(
 
 @table_app.command("sizes")
 @cli_errors
+@audited
 def table_sizes(
     limit: Annotated[int, typer.Option("--limit", help="Tables to return")] = 20,
     target: TargetOption = None,
@@ -35,6 +37,7 @@ def table_sizes(
 
 @table_app.command("bloat")
 @cli_errors
+@audited
 def table_bloat(
     limit: Annotated[int, typer.Option("--limit", help="Tables to inspect")] = 50,
     target: TargetOption = None,
@@ -48,6 +51,7 @@ def table_bloat(
 
 @table_app.command("autovacuum")
 @cli_errors
+@audited
 def table_autovacuum(
     limit: Annotated[int, typer.Option("--limit", help="Tables to inspect")] = 50,
     target: TargetOption = None,

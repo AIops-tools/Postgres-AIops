@@ -7,7 +7,7 @@ from typing import Annotated
 
 import typer
 
-from postgres_aiops.cli._common import TargetOption, cli_errors, console, get_connection
+from postgres_aiops.cli._common import TargetOption, audited, cli_errors, console, get_connection
 
 server_app = typer.Typer(
     name="server",
@@ -18,6 +18,7 @@ server_app = typer.Typer(
 
 @server_app.command("version")
 @cli_errors
+@audited
 def server_version(target: TargetOption = None) -> None:
     """Server version, uptime and recovery state."""
     from postgres_aiops.ops import server as ops
@@ -28,6 +29,7 @@ def server_version(target: TargetOption = None) -> None:
 
 @server_app.command("settings")
 @cli_errors
+@audited
 def server_settings(
     pattern: Annotated[str | None, typer.Argument(help="Name substring filter")] = None,
     target: TargetOption = None,
@@ -41,6 +43,7 @@ def server_settings(
 
 @server_app.command("extensions")
 @cli_errors
+@audited
 def server_extensions(target: TargetOption = None) -> None:
     """Installed extensions."""
     from postgres_aiops.ops import server as ops
@@ -51,6 +54,7 @@ def server_extensions(target: TargetOption = None) -> None:
 
 @server_app.command("databases")
 @cli_errors
+@audited
 def server_databases(target: TargetOption = None) -> None:
     """Databases with owner, encoding and size."""
     from postgres_aiops.ops import server as ops
@@ -61,6 +65,7 @@ def server_databases(target: TargetOption = None) -> None:
 
 @server_app.command("roles")
 @cli_errors
+@audited
 def server_roles(target: TargetOption = None) -> None:
     """Roles and their attributes."""
     from postgres_aiops.ops import server as ops

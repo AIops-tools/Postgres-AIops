@@ -8,6 +8,7 @@ import typer
 
 from postgres_aiops.cli._common import (
     TargetOption,
+    audited,
     cli_errors,
     get_connection,
     print_result,
@@ -22,6 +23,7 @@ analyze_app = typer.Typer(
 
 @analyze_app.command("slow-query")
 @cli_errors
+@audited
 def analyze_slow_query(
     explain_sql: Annotated[str | None, typer.Option("--explain", help="SQL to EXPLAIN")] = None,
     limit: Annotated[int, typer.Option("--limit", help="Statements to consider")] = 20,
@@ -41,6 +43,7 @@ def analyze_slow_query(
 
 @analyze_app.command("bloat-vacuum")
 @cli_errors
+@audited
 def analyze_bloat_vacuum(
     limit: Annotated[int, typer.Option("--limit", help="Tables to consider")] = 50,
     target: TargetOption = None,
@@ -58,6 +61,7 @@ def analyze_bloat_vacuum(
 
 @analyze_app.command("blocking")
 @cli_errors
+@audited
 def analyze_blocking(target: TargetOption = None) -> None:
     """Build the blocking-lock chain and name the root blocker."""
     from postgres_aiops.ops import activity, analysis

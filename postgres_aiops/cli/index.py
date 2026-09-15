@@ -9,6 +9,7 @@ import typer
 
 from postgres_aiops.cli._common import (
     TargetOption,
+    audited,
     cli_errors,
     console,
     get_connection,
@@ -24,6 +25,7 @@ index_app = typer.Typer(
 
 @index_app.command("unused")
 @cli_errors
+@audited
 def index_unused(target: TargetOption = None) -> None:
     """Non-unique, non-primary indexes with zero scans."""
     from postgres_aiops.ops import indexes as ops
@@ -34,6 +36,7 @@ def index_unused(target: TargetOption = None) -> None:
 
 @index_app.command("missing")
 @cli_errors
+@audited
 def index_missing(target: TargetOption = None) -> None:
     """Tables with heavy sequential scans (missing-index hints)."""
     from postgres_aiops.ops import indexes as ops
@@ -44,6 +47,7 @@ def index_missing(target: TargetOption = None) -> None:
 
 @index_app.command("bloat")
 @cli_errors
+@audited
 def index_bloat(
     limit: Annotated[int, typer.Option("--limit", help="Indexes to inspect")] = 50,
     target: TargetOption = None,
@@ -57,6 +61,7 @@ def index_bloat(
 
 @index_app.command("invalid")
 @cli_errors
+@audited
 def index_invalid(target: TargetOption = None) -> None:
     """Invalid and duplicate indexes."""
     from postgres_aiops.ops import indexes as ops
