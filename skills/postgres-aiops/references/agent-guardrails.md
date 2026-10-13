@@ -28,7 +28,7 @@ recorded on the audit row; they are never required and never block a call.
 ## What still needs a prompt
 
 These are model-behaviour problems the harness cannot fix from the outside.
-Copy this into your agent's system prompt:
+Recommended setup for a local model (adapt it to your agent client):
 
 ```text
 You operate a PostgreSQL server through the postgres-aiops MCP tools.
