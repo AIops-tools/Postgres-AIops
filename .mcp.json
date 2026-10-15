@@ -5,7 +5,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "postgres-aiops==0.11.0",
+        "postgres-aiops==0.12.0",
         "postgres-aiops-mcp"
       ]
     }
