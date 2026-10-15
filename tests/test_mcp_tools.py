@@ -1,6 +1,6 @@
 """MCP tool wrappers — dry-run previews, live-pull branches, and undo builders.
 
-These exercise the ``mcp_server/tools`` layer that the ops tests don't reach: the
+These exercise the ``postgres_aiops/mcp_server/tools`` layer that the ops tests don't reach: the
 governed-twin ``dry_run`` short-circuits, the "pull live when not injected"
 branches (which resolve a connection through ``_get_connection``), the
 argument-validation guards on ``create_index``, and the three pure undo-descriptor
@@ -42,7 +42,7 @@ def gov_home(tmp_path, monkeypatch):
 
 @pytest.mark.unit
 def test_create_index_undo_inverts_to_drop():
-    from mcp_server.tools.remediation import _create_index_undo
+    from postgres_aiops.mcp_server.tools.remediation import _create_index_undo
 
     desc = _create_index_undo({}, {"index": "idx_orders_cid"})
     assert desc["tool"] == "drop_index"
@@ -52,7 +52,7 @@ def test_create_index_undo_inverts_to_drop():
 
 @pytest.mark.unit
 def test_create_index_undo_none_when_no_index():
-    from mcp_server.tools.remediation import _create_index_undo
+    from postgres_aiops.mcp_server.tools.remediation import _create_index_undo
 
     assert _create_index_undo({}, {"index": ""}) is None
     assert _create_index_undo({}, "not-a-dict") is None
@@ -60,7 +60,7 @@ def test_create_index_undo_none_when_no_index():
 
 @pytest.mark.unit
 def test_drop_index_undo_recreates_from_captured_definition():
-    from mcp_server.tools.remediation import _drop_index_undo
+    from postgres_aiops.mcp_server.tools.remediation import _drop_index_undo
 
     indexdef = "CREATE INDEX idx_t ON public.t USING btree (c)"
     desc = _drop_index_undo({}, {"priorState": {"indexdef": indexdef}})
@@ -70,7 +70,7 @@ def test_drop_index_undo_recreates_from_captured_definition():
 
 @pytest.mark.unit
 def test_drop_index_undo_none_without_definition():
-    from mcp_server.tools.remediation import _drop_index_undo
+    from postgres_aiops.mcp_server.tools.remediation import _drop_index_undo
 
     assert _drop_index_undo({}, {"priorState": {}}) is None
     assert _drop_index_undo({}, "nope") is None
@@ -79,7 +79,7 @@ def test_drop_index_undo_none_without_definition():
 @pytest.mark.unit
 def test_update_setting_undo_sets_back_prior_value_when_it_was_pinned():
     """Only a parameter already carried by auto.conf is restored by value."""
-    from mcp_server.tools.remediation import _update_setting_undo
+    from postgres_aiops.mcp_server.tools.remediation import _update_setting_undo
 
     desc = _update_setting_undo(
         {"name": "work_mem"},
@@ -98,7 +98,7 @@ def test_update_setting_undo_resets_when_there_was_no_auto_conf_entry():
     ``source = default`` with a NULL sourcefile, so the inverse of setting it
     must be ALTER SYSTEM RESET, not ALTER SYSTEM SET back to the old number.
     """
-    from mcp_server.tools.remediation import _update_setting_undo
+    from postgres_aiops.mcp_server.tools.remediation import _update_setting_undo
 
     desc = _update_setting_undo(
         {"name": "work_mem"},
@@ -119,7 +119,7 @@ def test_update_setting_undo_resets_when_there_was_no_auto_conf_entry():
     ],
 )
 def test_update_setting_undo_none_when_pinned_but_no_prior_value(result):
-    from mcp_server.tools.remediation import _update_setting_undo
+    from postgres_aiops.mcp_server.tools.remediation import _update_setting_undo
 
     assert _update_setting_undo({"name": "work_mem"}, result) is None
 
@@ -129,7 +129,7 @@ def test_update_setting_undo_none_when_pinned_but_no_prior_value(result):
 
 @pytest.mark.unit
 def test_terminate_and_cancel_dry_run(gov_home, monkeypatch):
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     fake = FakePg()
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: fake)
@@ -143,7 +143,7 @@ def test_terminate_and_cancel_dry_run(gov_home, monkeypatch):
 
 @pytest.mark.unit
 def test_vacuum_analyze_reindex_setting_dry_run(gov_home, monkeypatch):
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     fake = FakePg()
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: fake)
@@ -158,7 +158,7 @@ def test_vacuum_analyze_reindex_setting_dry_run(gov_home, monkeypatch):
 
 @pytest.mark.unit
 def test_create_index_dry_run_both_shapes(gov_home, monkeypatch):
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: FakePg())
     cols = gov.create_index(table="t", columns=["a"], dry_run=True)
@@ -169,7 +169,7 @@ def test_create_index_dry_run_both_shapes(gov_home, monkeypatch):
 
 @pytest.mark.unit
 def test_drop_index_dry_run(gov_home, monkeypatch):
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: FakePg())
     assert gov.drop_index(name="i", dry_run=True)["wouldDrop"] == {"name": "i"}
@@ -180,7 +180,7 @@ def test_drop_index_dry_run(gov_home, monkeypatch):
 
 @pytest.mark.unit
 def test_create_index_rejects_definition_and_table_together(gov_home, monkeypatch):
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: FakePg())
     # @tool_errors sanitises the ValueError into an {"error": ...} envelope
@@ -190,7 +190,7 @@ def test_create_index_rejects_definition_and_table_together(gov_home, monkeypatc
 
 @pytest.mark.unit
 def test_create_index_requires_table_or_definition(gov_home, monkeypatch):
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: FakePg())
     out = gov.create_index()
@@ -199,7 +199,7 @@ def test_create_index_requires_table_or_definition(gov_home, monkeypatch):
 
 @pytest.mark.unit
 def test_create_index_from_definition_executes_verbatim(gov_home, monkeypatch):
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     fake = FakePg()
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: fake)
@@ -214,7 +214,7 @@ def test_create_index_from_definition_executes_verbatim(gov_home, monkeypatch):
 
 @pytest.mark.unit
 def test_slow_query_rca_pulls_live_and_uses_explain(gov_home, monkeypatch):
-    from mcp_server.tools import analysis as gov
+    from postgres_aiops.mcp_server.tools import analysis as gov
 
     fake = FakePg({
         "FROM pg_stat_statements": [{"queryid": 9, "query": "SELECT big", "calls": 40,
@@ -232,7 +232,7 @@ def test_slow_query_rca_pulls_live_and_uses_explain(gov_home, monkeypatch):
 
 @pytest.mark.unit
 def test_bloat_analysis_pulls_live(gov_home, monkeypatch):
-    from mcp_server.tools import analysis as gov
+    from postgres_aiops.mcp_server.tools import analysis as gov
 
     fake = FakePg({"FROM pg_stat_user_tables": [
         {"schema": "public", "table": "hot", "n_live_tup": 5000, "n_dead_tup": 5000,
@@ -245,7 +245,7 @@ def test_bloat_analysis_pulls_live(gov_home, monkeypatch):
 
 @pytest.mark.unit
 def test_blocking_rca_pulls_live(gov_home, monkeypatch):
-    from mcp_server.tools import analysis as gov
+    from postgres_aiops.mcp_server.tools import analysis as gov
 
     fake = FakePg({"pg_blocking_pids": [
         {"blocked_pid": 200, "blocking_pid": 100, "blocking_query": "UPDATE a"},

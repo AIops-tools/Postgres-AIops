@@ -2,8 +2,8 @@
 
 from typing import Optional
 
-from mcp_server._shared import _get_connection, mcp, tool_errors
 from postgres_aiops.governance import governed_tool
+from postgres_aiops.mcp_server._shared import _get_connection, mcp, tool_errors
 from postgres_aiops.ops import overview as overview_ops
 from postgres_aiops.ops import server as ops
 

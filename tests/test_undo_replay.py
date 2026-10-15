@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.tools import remediation as gov
+from postgres_aiops.mcp_server.tools import remediation as gov
 from postgres_aiops.ops import remediation as ops
 
 INDEXDEF = 'CREATE UNIQUE INDEX idx_orders_ts ON public.orders USING btree (ts)'

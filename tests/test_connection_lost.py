@@ -15,13 +15,13 @@ from __future__ import annotations
 import psycopg
 import pytest
 
-from mcp_server._shared import _UNDETERMINED_ERRORS
 from postgres_aiops.config import TargetConfig
 from postgres_aiops.connection import (
     PgConnection,
     PgConnectionLostError,
     PgError,
 )
+from postgres_aiops.mcp_server._shared import _UNDETERMINED_ERRORS
 
 
 class _RaisingCursor:

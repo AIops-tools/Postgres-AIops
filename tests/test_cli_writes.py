@@ -1,7 +1,7 @@
 """CLI confirmed-write path — past dry-run, through governance, onto disk.
 
 The CLI write commands delegate real execution to the ``@governed_tool``
-functions in ``mcp_server.tools``. These tests drive a write command PAST the
+functions in ``postgres_aiops.mcp_server.tools``. These tests drive a write command PAST the
 dry-run branch and the double-confirm prompts and assert the call really went
 through the governed path (audit row on disk) — the regression test for the
 "CLI writes were unaudited" line-wide fix.
@@ -56,7 +56,7 @@ def test_cli_query_reset_dry_run_never_writes_but_is_audited(gov_home, monkeypat
     from postgres_aiops.cli import app
 
     fake = fake_pg()
-    import mcp_server.tools.queries as gov_queries
+    import postgres_aiops.mcp_server.tools.queries as gov_queries
 
     monkeypatch.setattr(gov_queries, "_get_connection", lambda target=None: fake)
     result = CliRunner().invoke(app, ["query", "reset", "--dry-run"])
@@ -74,7 +74,7 @@ def test_cli_query_reset_confirmed_goes_through_governance(gov_home, monkeypatch
     from postgres_aiops.cli import app
 
     fake = fake_pg(responses={"pg_stat_statements_reset": [{"reset": True}]})
-    import mcp_server.tools.queries as gov_queries
+    import postgres_aiops.mcp_server.tools.queries as gov_queries
 
     monkeypatch.setattr(gov_queries, "_get_connection", lambda target=None: fake)
     result = CliRunner().invoke(app, ["query", "reset"], input="y\ny\n")
@@ -87,7 +87,7 @@ def test_cli_query_reset_aborts_without_double_confirm(gov_home, monkeypatch, fa
     from postgres_aiops.cli import app
 
     fake = fake_pg()
-    import mcp_server.tools.queries as gov_queries
+    import postgres_aiops.mcp_server.tools.queries as gov_queries
 
     monkeypatch.setattr(gov_queries, "_get_connection", lambda target=None: fake)
     result = CliRunner().invoke(app, ["query", "reset"], input="y\nn\n")

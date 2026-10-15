@@ -119,7 +119,7 @@ def test_analysis_reports_when_its_source_read_was_truncated(tmp_path, monkeypat
     would be silently dropped on the way into the analysis.
     """
     monkeypatch.setenv("POSTGRES_AIOPS_HOME", str(tmp_path))
-    from mcp_server.tools import analysis as gov_analysis
+    from postgres_aiops.mcp_server.tools import analysis as gov_analysis
 
     conn = FakePg({"FROM pg_stat_statements": [
         {"queryid": i, "query": f"SELECT {i}", "calls": 1, "total_exec_time_ms": 100 - i,
@@ -139,7 +139,7 @@ def test_analysis_reports_when_its_source_read_was_truncated(tmp_path, monkeypat
 def test_analysis_omits_the_source_flag_when_rows_are_injected(tmp_path, monkeypatch):
     """Injected rows have no source read, so there is no truncation to report."""
     monkeypatch.setenv("POSTGRES_AIOPS_HOME", str(tmp_path))
-    from mcp_server.tools import analysis as gov_analysis
+    from postgres_aiops.mcp_server.tools import analysis as gov_analysis
 
     out = gov_analysis.slow_query_rca(statements=[{"totalExecTimeMs": 5, "calls": 1}])
     assert "sourceTruncated" not in out

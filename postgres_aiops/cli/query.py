@@ -70,7 +70,7 @@ def query_reset(target: TargetOption = None, dry_run: DryRunOption = False) -> N
     ``@governed_tool``-wrapped MCP function, so each is audited on the same
     governance path as MCP calls.
     """
-    from mcp_server.tools import queries as gov
+    from postgres_aiops.mcp_server.tools import queries as gov
 
     if dry_run:
         dry_run_preview(

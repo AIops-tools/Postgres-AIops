@@ -32,7 +32,7 @@ def remediate_terminate(
     dry_run: DryRunOption = False,
 ) -> None:
     """Terminate a backend (no undo; dry-run + confirm)."""
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     if dry_run:
         # Through the governed call: terminate_backend refuses this tool's own
@@ -54,7 +54,7 @@ def remediate_cancel(
     dry_run: DryRunOption = False,
 ) -> None:
     """Cancel a backend's running query (no undo; dry-run + confirm)."""
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     if dry_run:
         dry_run_preview(
@@ -76,7 +76,7 @@ def remediate_vacuum(
     dry_run: DryRunOption = False,
 ) -> None:
     """VACUUM a table (dry-run + confirm)."""
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     if dry_run:
         dry_run_preview(
@@ -97,7 +97,7 @@ def remediate_analyze(
     dry_run: DryRunOption = False,
 ) -> None:
     """ANALYZE a table (dry-run + confirm)."""
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     if dry_run:
         dry_run_preview(
@@ -120,7 +120,7 @@ def remediate_create_index(
     dry_run: DryRunOption = False,
 ) -> None:
     """Create an index (reversible; dry-run + confirm)."""
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     if dry_run:
         # Through the governed call: create_index validates the table/columns vs
@@ -146,7 +146,7 @@ def remediate_drop_index(
     dry_run: DryRunOption = False,
 ) -> None:
     """Drop an index (reversible; captures the definition first; dry-run + confirm)."""
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     if dry_run:
         dry_run_preview(
@@ -168,7 +168,7 @@ def remediate_reindex(
     dry_run: DryRunOption = False,
 ) -> None:
     """REINDEX an index/table/schema (dry-run + confirm)."""
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     if dry_run:
         dry_run_preview(
@@ -195,7 +195,7 @@ def remediate_set(
     dry_run: DryRunOption = False,
 ) -> None:
     """ALTER SYSTEM SET a parameter, or --reset it (reversible; dry-run + confirm)."""
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     action = f"ALTER SYSTEM RESET {name}" if reset else f"ALTER SYSTEM SET {name} ="
     if dry_run:

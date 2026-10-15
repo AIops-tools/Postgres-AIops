@@ -127,7 +127,7 @@ def test_real_write_tool_persists_priorstate_undo(gov_home, monkeypatch, fake_pg
     indexdef = "CREATE INDEX idx_orders_ts ON public.orders USING btree (ts)"
     fake = fake_pg(scalars={"pg_get_indexdef": indexdef})
 
-    from mcp_server.tools import remediation as gov
+    from postgres_aiops.mcp_server.tools import remediation as gov
 
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: fake)
     result = gov.drop_index(name="idx_orders_ts")

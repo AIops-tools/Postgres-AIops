@@ -16,9 +16,9 @@ import pytest
 import postgres_aiops.governance.audit as audit_mod
 import postgres_aiops.governance.policy as policy_mod
 import postgres_aiops.governance.undo as undo_mod
-from mcp_server._shared import mcp
-from mcp_server.tools import undo as gov
 from postgres_aiops.governance import governed_tool
+from postgres_aiops.mcp_server._shared import mcp
+from postgres_aiops.mcp_server.tools import undo as gov
 
 _CALLS: list[dict] = []
 _TARGETS: list = []
@@ -226,7 +226,7 @@ def test_undo_apply_audits_both_wrapper_and_inverse(gov_home):
 @pytest.mark.unit
 def test_resolve_tool_loads_full_registry_under_cli_only_import():
     """Regression (live-found 2026-07-31): CLI ``undo apply`` runs in a process
-    that imports only ``mcp_server.tools.undo`` — every write tool is imported
+    that imports only ``postgres_aiops.mcp_server.tools.undo`` — every write tool is imported
     lazily inside its own CLI command, so the inverse was "not registered" and
     CLI-initiated undo failed for every write tool. ``_resolve_tool`` must force
     a full server load on a miss.
@@ -240,8 +240,8 @@ def test_resolve_tool_loads_full_registry_under_cli_only_import():
 
     script = textwrap.dedent(
         """
-        from mcp_server._shared import mcp
-        import mcp_server.tools.undo as u
+        from postgres_aiops.mcp_server._shared import mcp
+        import postgres_aiops.mcp_server.tools.undo as u
         before = set(mcp._tool_manager._tools)
         # A miss must trigger the full-registry load, not just return None.
         u._resolve_tool("__definitely_not_a_tool__")

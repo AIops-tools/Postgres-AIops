@@ -79,12 +79,12 @@ def test_all_modules_import():
         "postgres_aiops.ops.overview",
         "postgres_aiops.cli", "postgres_aiops.cli._root", "postgres_aiops.cli._common",
         "postgres_aiops.cli.init", "postgres_aiops.cli.secret",
-        "mcp_server.server", "mcp_server._shared",
-        "mcp_server.tools.server", "mcp_server.tools.activity",
-        "mcp_server.tools.queries", "mcp_server.tools.indexes",
-        "postgres_aiops.cli.undo", "mcp_server.tools.undo",
-        "mcp_server.tools.tables", "mcp_server.tools.replication",
-        "mcp_server.tools.analysis", "mcp_server.tools.remediation",
+        "postgres_aiops.mcp_server.server", "postgres_aiops.mcp_server._shared",
+        "postgres_aiops.mcp_server.tools.server", "postgres_aiops.mcp_server.tools.activity",
+        "postgres_aiops.mcp_server.tools.queries", "postgres_aiops.mcp_server.tools.indexes",
+        "postgres_aiops.cli.undo", "postgres_aiops.mcp_server.tools.undo",
+        "postgres_aiops.mcp_server.tools.tables", "postgres_aiops.mcp_server.tools.replication",
+        "postgres_aiops.mcp_server.tools.analysis", "postgres_aiops.mcp_server.tools.remediation",
     ):
         importlib.import_module(name)
 
@@ -137,7 +137,7 @@ def test_cli_leaf_help_triggers_lazy_imports():
 
 @pytest.mark.unit
 def test_mcp_list_tools_exposes_expected_tools():
-    from mcp_server.server import mcp
+    from postgres_aiops.mcp_server.server import mcp
 
     tools = asyncio.run(mcp.list_tools())
     names = {t.name for t in tools}
@@ -146,7 +146,7 @@ def test_mcp_list_tools_exposes_expected_tools():
 
 @pytest.mark.unit
 def test_every_mcp_tool_is_governed_by_harness():
-    from mcp_server import _shared
+    from postgres_aiops.mcp_server import _shared
 
     tool_objs = _shared.mcp._tool_manager._tools
     assert len(tool_objs) == 35, (
@@ -163,8 +163,8 @@ def test_every_mcp_tool_is_governed_by_harness():
 
 @pytest.mark.unit
 def test_write_tools_have_correct_risk_tiers():
-    from mcp_server.tools import queries as q
-    from mcp_server.tools import remediation as rem
+    from postgres_aiops.mcp_server.tools import queries as q
+    from postgres_aiops.mcp_server.tools import remediation as rem
 
     assert q.reset_query_stats._risk_level == "medium"
     for tool_name, expected in WRITE_RISK.items():
@@ -177,7 +177,7 @@ def test_write_tools_have_correct_risk_tiers():
 def test_drop_index_records_undo_from_captured_indexdef(monkeypatch):
     """drop_index through the harness records an inverse recreate from pg_get_indexdef."""
     import postgres_aiops.governance.undo as undo_mod
-    from mcp_server.tools import remediation as rem
+    from postgres_aiops.mcp_server.tools import remediation as rem
 
     indexdef = "CREATE INDEX idx_orders_cid ON public.orders USING btree (customer_id)"
     conn = FakePg({}, {"pg_get_indexdef": indexdef})
@@ -203,7 +203,7 @@ def test_drop_index_records_undo_from_captured_indexdef(monkeypatch):
 def test_create_index_undo_drops_created_name(monkeypatch):
     """create_index through the harness records an inverse that drops the new index."""
     import postgres_aiops.governance.undo as undo_mod
-    from mcp_server.tools import remediation as rem
+    from postgres_aiops.mcp_server.tools import remediation as rem
 
     conn = FakePg()
     monkeypatch.setattr(rem, "_get_connection", lambda target=None: conn)
@@ -231,8 +231,8 @@ def test_dry_run_gates_destructive_cli(monkeypatch, smoke_gov_home):
     (that is how its guards run against the real target); what it must never do
     is issue the DROP.
     """
-    from mcp_server.tools import remediation as rem
     from postgres_aiops.cli import app
+    from postgres_aiops.mcp_server.tools import remediation as rem
 
     conn = FakePg()
     monkeypatch.setattr(rem, "_get_connection", lambda target=None: conn)
@@ -246,7 +246,7 @@ def test_dry_run_gates_destructive_cli(monkeypatch, smoke_gov_home):
 
 @pytest.mark.unit
 def test_dry_run_mcp_write_does_not_execute(monkeypatch):
-    from mcp_server.tools import remediation as rem
+    from postgres_aiops.mcp_server.tools import remediation as rem
 
     conn = FakePg()
     monkeypatch.setattr(rem, "_get_connection", lambda target=None: conn)
@@ -266,7 +266,7 @@ def test_risk_level_agrees_with_read_write_docstring_tag():
     16 such mislabels line-wide once, so it is kept even though read-only mode
     (its original motivation) is gone.
     """
-    from mcp_server import server
+    from postgres_aiops.mcp_server import server
 
     untagged, mismatched = [], []
     for name, tool in server.mcp._tool_manager._tools.items():

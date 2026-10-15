@@ -1,7 +1,7 @@
 """CLI ``remediate`` sub-commands — dry-run previews and error translation.
 
 Every ``--dry-run`` routes its preview through the ``@governed_tool``-wrapped
-twin in ``mcp_server.tools``, so the guards the real write would hit run against
+twin in ``postgres_aiops.mcp_server.tools``, so the guards the real write would hit run against
 the real target and an audit row lands for the preview itself. A preview of a
 call that will be refused must report the refusal rather than a green banner:
 otherwise the caller reads the later refusal as transient and retries.
@@ -58,7 +58,7 @@ def gov_home(tmp_path, monkeypatch):
 @pytest.fixture
 def guarded_conn(monkeypatch):
     """Wire the governed remediation tools to a fake whose own backend pid is known."""
-    import mcp_server.tools.remediation as gov
+    import postgres_aiops.mcp_server.tools.remediation as gov
 
     fake = FakePg(
         {"FROM pg_stat_activity": [{"pid": 42, "username": "app"}],
@@ -167,7 +167,7 @@ def test_drop_index_dry_run_reports_an_unreachable_target(monkeypatch):
     Before the reroute this printed a confident green DRY-RUN for a target the
     CLI had never contacted — the exact green-preview-then-refusal trap.
     """
-    import mcp_server.tools.remediation as gov
+    import postgres_aiops.mcp_server.tools.remediation as gov
     from postgres_aiops.cli import app
     from postgres_aiops.connection import PgError
 
