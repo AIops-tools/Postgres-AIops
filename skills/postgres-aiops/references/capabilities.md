@@ -32,7 +32,7 @@
 | `wal_status` | WAL fns + `pg_stat_archiver` | currentLsn, walLevel, max/minWalSize, archiver |
 | `slow_query_rca` | pg_stat_statements + EXPLAIN | worst{}, findings[] (cited cause/action) |
 | `bloat_and_vacuum_analysis` | table-bloat rows | recommendations[] (cited reasons + action) |
-| `blocking_lock_chain_rca` | `pg_blocking_pids` pairs | roots[], worstRootPid, deadlockSuspected |
+| `blocking_lock_chain_rca` | `pg_blocking_pids` pairs | roots[] (rootQuery, rootState, rootIdle — true for any `idle*` state; rootQuery is then the last statement run, not a running one — and action), worstRootPid, deadlockSuspected |
 | `undo_list` | local undo store | recorded, not-yet-applied reversible writes: undoId, ts, originalTool, inverseTool, note |
 
 The flagship analyses accept injected records (`statements=` / `tables=` /

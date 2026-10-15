@@ -12,6 +12,14 @@
   level is published in `_meta` under `io.github.AIops-tools/riskLevel`. These
   are hints for the client; audit and undo are unchanged.
 
+### Fixed
+- `blocking_lock_chain_rca`: the chain root's state was dropped and a missing
+  query became `""`. For a backend that is `idle in transaction`, `rootQuery` is
+  the last statement it ran, not a running one, so the recommended
+  `cancel_query` had nothing to cancel. Roots now carry `rootState` and
+  `rootIdle` (true for any `idle*` state, including plain `idle` with session-level locks), a missing query stays `null`, and the action for an
+  idle root points at `terminate_backend` (which rolls the transaction back).
+
 ## v0.10.3 — 2026-09-15
 
 ### Fixed

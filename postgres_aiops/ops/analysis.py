@@ -201,6 +201,22 @@ def _descendants(root: int, children: dict[int, list[int]]) -> set[int]:
     return seen
 
 
+def _lock_root_action(pid: int, idle: bool | None) -> str:
+    if idle:
+        return (
+            f"Backend {pid} heads the chain but is not running a statement (see "
+            "rootState: an open transaction, or session-level locks): rootQuery is "
+            "the last statement it ran, not a running one. cancel_query has nothing "
+            f"to cancel; terminate_backend({pid}) ends the session, rolling back any "
+            "transaction and releasing its locks — confirm with its owner first."
+        )
+    return (
+        f"Backend {pid} is the head of the chain — investigate its transaction; "
+        f"cancel_query({pid}) to stop its statement, or terminate_backend({pid}) to "
+        "end the session and release the locks."
+    )
+
+
 def blocking_lock_chain_rca(pairs: list[dict]) -> dict:
     """[READ] Build the wait-for tree from blocking pairs and name the root blocker.
 
@@ -217,7 +233,8 @@ def blocking_lock_chain_rca(pairs: list[dict]) -> dict:
         return {"blockedBackends": 0, "roots": [], "note": "No blocking detected."}
 
     children: dict[int, list[int]] = {}
-    blocking_query: dict[int, str] = {}
+    blocking_query: dict[int, str | None] = {}
+    blocking_state: dict[int, str | None] = {}
     blocked_pids: set[int] = set()
     blocking_pids: set[int] = set()
     for e in edges:
@@ -225,7 +242,8 @@ def blocking_lock_chain_rca(pairs: list[dict]) -> dict:
         children.setdefault(g, []).append(b)
         blocked_pids.add(b)
         blocking_pids.add(g)
-        blocking_query.setdefault(g, e.get("blockingQuery") or "")
+        blocking_query.setdefault(g, e.get("blockingQuery"))
+        blocking_state.setdefault(g, e.get("blockingState"))
 
     root_pids = [pid for pid in blocking_pids if pid not in blocked_pids]
     if not root_pids:
@@ -242,16 +260,18 @@ def blocking_lock_chain_rca(pairs: list[dict]) -> dict:
     roots = []
     for pid in root_pids:
         blocked = _descendants(pid, children)
+        state = blocking_state.get(pid)
+        # Any idle state means no statement is running: "idle in transaction"
+        # holds row locks, plain "idle" can still hold session-level advisory locks.
+        idle = None if state is None else str(state).startswith("idle")
         roots.append({
             "rootPid": pid,
             "blockedCount": len(blocked),
             "blockedPids": sorted(blocked),
-            "rootQuery": blocking_query.get(pid, ""),
-            "action": (
-                f"Backend {pid} is the head of the chain — investigate its "
-                "transaction; cancel_query(pid) to stop its statement, or "
-                "terminate_backend(pid) to end the session and release the locks."
-            ),
+            "rootQuery": blocking_query.get(pid),
+            "rootState": state,
+            "rootIdle": idle,
+            "action": _lock_root_action(pid, idle),
         })
     roots.sort(key=lambda r: r["blockedCount"], reverse=True)
     return {

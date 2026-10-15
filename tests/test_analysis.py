@@ -82,3 +82,48 @@ def test_blocking_chain_detects_cycle():
 def test_blocking_chain_no_blocking():
     out = analysis.blocking_lock_chain_rca([])
     assert out["blockedBackends"] == 0
+
+
+# ── lock-chain root that is idle inside an open transaction ──────────────────
+
+
+def _pg_pairs(state, query="UPDATE t SET v=1 WHERE id=1"):
+    return [{"blockedPid": 201, "blockingPid": 100, "blockedQuery": "DELETE FROM t",
+             "blockingQuery": query, "blockingState": state}]
+
+
+def test_idle_in_transaction_root_is_named_and_cancel_is_ruled_out():
+    from postgres_aiops.ops import analysis as a
+
+    (root,) = a.blocking_lock_chain_rca(_pg_pairs("idle in transaction"))["roots"]
+    assert root["rootState"] == "idle in transaction"
+    assert root["rootIdle"] is True
+    # The query is the LAST statement it ran, not a running one.
+    assert "last statement" in root["action"]
+    assert "terminate_backend(100)" in root["action"]
+    assert "nothing to cancel" in root["action"]
+
+
+def test_active_root_offers_cancel_first():
+    from postgres_aiops.ops import analysis as a
+
+    (root,) = a.blocking_lock_chain_rca(_pg_pairs("active"))["roots"]
+    assert root["rootIdle"] is False
+    assert "cancel_query(100)" in root["action"]
+
+
+def test_missing_root_query_stays_null():
+    from postgres_aiops.ops import analysis as a
+
+    (root,) = a.blocking_lock_chain_rca(_pg_pairs(None, query=None))["roots"]
+    assert root["rootQuery"] is None
+    assert root["rootState"] is None
+    assert root["rootIdle"] is None  # state unknown
+
+
+def test_plain_idle_root_with_session_locks_is_not_offered_cancel():
+    from postgres_aiops.ops import analysis as a
+
+    (root,) = a.blocking_lock_chain_rca(_pg_pairs("idle"))["roots"]
+    assert root["rootIdle"] is True
+    assert "terminate_backend(100)" in root["action"]
