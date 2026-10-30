@@ -2,6 +2,8 @@
 
 # Postgres AIops
 
+> **Audit availability:** Real writes require a committed `pending` audit row and stop before contacting the platform if storage is unavailable. Reads and previews may continue with a warning; new audit rows store outcome summaries rather than full responses.
+
 > **Disclaimer**: Community-maintained open-source project. **Not affiliated with, endorsed by, or sponsored by the PostgreSQL Global Development Group or any vendor.** "PostgreSQL" and the elephant logo are trademarks of the PostgreSQL Community Association; all product/trademark names belong to their respective owners. MIT licensed.
 
 Governed AI-ops for **PostgreSQL DBA operations** — connecting to a server with
@@ -136,7 +138,7 @@ postgres-aiops-mcp
 
 Every MCP tool passes through the bundled `@governed_tool` harness:
 
-- **Audit** — every call (params, result, status, duration, risk tier, and any
+- **Audit** — every call (params, outcome summary, status, duration, risk tier, and any
   operator-supplied approver/rationale) is logged to `~/.postgres-aiops/audit.db`
   (relocatable via `POSTGRES_AIOPS_HOME`). The CLI writes the same row the MCP
   path does — there is no unaudited entry point.
